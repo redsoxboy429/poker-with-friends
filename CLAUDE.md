@@ -214,28 +214,37 @@ Chunk 3 — Setup Flow Redesign (already mostly done):
 - [x] Live tested PL Badacey DD, PL 10-30 DD, NL Single Draw, Dealer's Choice
 - [x] 399 tests passing
 
-**Phase 3 — WebSocket Multiplayer (~2-3 sessions)**
+**Phase 3 — WebSocket Multiplayer**
 
-Chunk 4 — Server + Room System:
-- [ ] Node.js server with Socket.io (localhost for testing, free-tier hosting later)
-- [ ] Room system: short codes (e.g. "ABCD"), shareable links
-- [ ] First player = host: picks game mode + stakes → gets link
-- [ ] Other players hit link → see stakes → pick buy-in → sit down
-- [ ] Engine runs server-side (single source of truth)
-- [ ] Game owner: first player picks game, only they can change it between hands, can pause/resume
+Session 1 — Server Foundation: COMPLETE (2026-03-26)
+- [x] npm workspaces (engine + client + server share code)
+- [x] Socket.io typed event protocol (client↔server)
+- [x] `getPlayerView()` state filter — own cards visible, opponent cards hidden (flop/stud/draw)
+- [x] Room manager — create/join/leave/reconnect, 4-char codes, host transfer
+- [x] Game controller — engine wrapper, action validation, state broadcasting, auto-deal countdown
+- [x] Express + Socket.io server entry point, health check
+- [x] 21 server tests passing (state filter + room manager)
+- [x] Hosting: Railway ($1/mo, free trial) + Vercel (free). Accounts created.
 
-Chunk 5 — State Sync:
-- [ ] Server runs game engine, validates all actions, broadcasts state
-- [ ] Each client sees only what they should (own hole cards, public info, actions)
-- [ ] Client becomes pure renderer — no engine code on client
-- [ ] Action validation server-side (prevents cheating/bugs)
+Session 2 — Client Refactor (NEXT):
+- [ ] Extract shared components from App.tsx (Table, PlayerSeat, ActionPanel, DrawPanel, etc.)
+- [ ] Add socket.io-client, create socket connection layer
+- [ ] Create MultiplayerApp.tsx (same rendering, actions via socket instead of local engine)
+- [ ] Lobby UI: Create Room / Join Room / Local Practice landing page
+- [ ] Room lobby: room code, shareable link, host controls, seat layout
+- [ ] Keep local practice mode working alongside multiplayer
+- [ ] Dev/prod env config (.env files for server URL)
 
-Chunk 6 — Player Management:
-- [ ] Join mid-game (sit out until next hand)
-- [ ] Leave (auto-fold current hand, seat opens)
-- [ ] Reconnect (restore state)
-- [ ] Dealer's choice edge case: chooser tracking handled server-side, accounts for player changes
-- [ ] Rebuy support (between hands)
+Session 3 — Deploy + Polish:
+- [ ] Deploy server to Railway, client to Vercel
+- [ ] Test with real devices (phone + laptop on same room)
+- [ ] Player management: join mid-game, leave gracefully, reconnect
+- [ ] Dealer's Choice chooser flow over sockets
+- [ ] Host game menu (change game between hands, kick)
+
+Session 4 — Security Audit:
+- [ ] **Privacy hacker bot**: automated agent that joins a room and aggressively attempts to view other players' cards via JS console, DOM inspection, network sniffing, WebSocket message interception, etc. Must confirm that no opponent card data leaks to the client at any point during play (only at showdown).
+- [ ] Verify state-filter covers all edge cases (stud up/down transitions, draw card counts, Drawmaha hybrid phases)
 
 ## Key Rules to Get Right
 - **PLO must-use-2 rule:** Player MUST use exactly 2 of their 4 hole cards. This affects hand evaluation — can't just find the best 5 from 9 cards.
