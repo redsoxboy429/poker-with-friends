@@ -200,7 +200,19 @@ Chunk 3 — Setup Flow Redesign (already mostly done):
 - [x] Badeucy/Badacey: "BADUGI" / "LOW" column labels (not "HIGH" / "LOW")
 - [x] 399 tests passing across 16 test files (25 new, 3 deleted, 2 fixed)
 - [x] **Total: 29 playable variants**
-- [ ] Still needs live testing of new PL DD variants + Limit Omaha High + selector flow
+
+**Phase 2e — Draw All-In + Side Pot Fixes: COMPLETE (2026-03-26)**
+- [x] All-in players now participate in draw rounds (draw ≠ betting — all-in only prevents betting)
+- [x] `findNextDrawer()` method includes all-in players in draw rotation (only excludes folded/sittingOut)
+- [x] `shouldRunoutOnAllIn()` never skips to showdown when draws remain
+- [x] Betting rounds auto-skipped when <2 players can bet, but draws still advance
+- [x] Excess bet return: when betting more than only opponent's stack, excess returned immediately (no phantom side pot)
+- [x] `collectBets()` returns uncontested side pots to the sole eligible player
+- [x] Draw action labels show for all-in players (e.g. "DREW 2" + "ALL IN" side by side)
+- [x] Audited across NL/PL/Limit single draw, double draw, and triple draw — all correct
+- [x] Drawmaha unaffected (separate class hierarchy)
+- [x] Live tested PL Badacey DD, PL 10-30 DD, NL Single Draw, Dealer's Choice
+- [x] 399 tests passing
 
 **Phase 3 — WebSocket Multiplayer (~2-3 sessions)**
 

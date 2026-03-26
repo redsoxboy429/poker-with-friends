@@ -231,7 +231,7 @@ export abstract class BaseGame {
 
       // Check if we should go to showdown (all but one all-in, or no more streets)
       const canAct = activePlayers.filter(p => !p.allIn);
-      if (canAct.length <= 1 && activePlayers.some(p => p.allIn)) {
+      if (canAct.length <= 1 && activePlayers.some(p => p.allIn) && this.shouldRunoutOnAllIn()) {
         // Run out remaining board and go to showdown
         this.dealRemainingCards();
         return this.resolveShowdown();
@@ -280,6 +280,16 @@ export abstract class BaseGame {
 
   /** Deal remaining cards when going to showdown early (all-in) */
   protected abstract dealRemainingCards(): void;
+
+  /**
+   * Whether to skip directly to showdown when all players are all-in.
+   * Returns true by default (correct for flop/stud games that deal community/board cards).
+   * Draw games override this to return false — players still need their draw rounds,
+   * even if some/all are all-in (all-in players simply stand pat).
+   */
+  protected shouldRunoutOnAllIn(): boolean {
+    return true;
+  }
 
   /** Evaluate a player's hand at showdown. Returns high hand result. */
   protected abstract evaluateHand(player: PlayerState): HandResult;

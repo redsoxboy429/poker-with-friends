@@ -356,16 +356,16 @@ describe('collectBets — side pot logic', () => {
     ];
 
     const pots = collectBets(players, []);
-    expect(pots.length).toBe(3);
+    // Only 2 pots — the excess 40 that only A can win is returned to A's stack
+    expect(pots.length).toBe(2);
     // Pot 1: 30 × 3 = 90 (all three)
     expect(pots[0].amount).toBe(90);
     expect(pots[0].eligiblePlayerIds.length).toBe(3);
     // Pot 2: 30 × 2 = 60 (A and B)
     expect(pots[1].amount).toBe(60);
     expect(pots[1].eligiblePlayerIds.length).toBe(2);
-    // Pot 3: 40 × 1 = 40 (A only)
-    expect(pots[2].amount).toBe(40);
-    expect(pots[2].eligiblePlayerIds.length).toBe(1);
+    // A gets 40 back (uncallable excess)
+    expect(players[0].chips).toBe(40);
   });
 });
 

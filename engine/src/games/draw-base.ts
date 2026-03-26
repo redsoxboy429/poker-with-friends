@@ -136,11 +136,45 @@ export abstract class BaseDrawGame extends BaseGame {
   }
 
   protected setFirstActorForStreet(): void {
-    // For both post-draw betting and drawing phases: first to act is left of button
-    const firstActor = this.findNextActivePlayer(this.state.buttonIndex);
-    if (firstActor !== -1) {
-      this.state.activePlayerIndex = firstActor;
+    const drawPhases = [GamePhase.Drawing1, GamePhase.Drawing2, GamePhase.Drawing3];
+    if (drawPhases.includes(this.state.phase)) {
+      // Draw phases: all-in players participate — use findNextDrawer
+      this.setFirstDrawer();
+    } else {
+      // Betting phases: only non-all-in players act
+      const firstActor = this.findNextActivePlayer(this.state.buttonIndex);
+      if (firstActor !== -1) {
+        this.state.activePlayerIndex = firstActor;
+      }
     }
+  }
+
+  /**
+   * Set the first drawer for a draw phase.
+   * Unlike betting, ALL-IN players participate in draws — they still get to
+   * choose discards. Only folded/sitting-out players are skipped.
+   */
+  private setFirstDrawer(): void {
+    const firstDrawer = this.findNextDrawer(this.state.buttonIndex);
+    if (firstDrawer !== -1) {
+      this.state.activePlayerIndex = firstDrawer;
+    }
+  }
+
+  /**
+   * Find the next player who can draw (includes all-in players).
+   * In draw poker, being all-in only prevents betting — you still draw cards.
+   */
+  private findNextDrawer(fromIndex: number): number {
+    const n = this.state.players.length;
+    for (let i = 1; i < n; i++) {
+      const idx = (fromIndex + i) % n;
+      const p = this.state.players[idx];
+      if (!p.folded && !p.sittingOut) {
+        return idx;
+      }
+    }
+    return -1;
   }
 
   protected getNextPhase(): GamePhase {
@@ -171,6 +205,12 @@ export abstract class BaseDrawGame extends BaseGame {
   protected dealRemainingCards(): void {
     // In draw games when all-in, remaining draws are skipped.
     // No community cards to deal, so nothing to do.
+  }
+
+  protected shouldRunoutOnAllIn(): boolean {
+    // Never skip to showdown if draws remain — all-in players still draw cards.
+    // Only skip when all draws are complete.
+    return this.currentDrawIndex >= this.maxDraws;
   }
 
   /** Override the abstract hand evaluation hook (subclasses implement this) */
@@ -226,9 +266,8 @@ export abstract class BaseDrawGame extends BaseGame {
       player.holeCards.push(this.deck.deal());
     }
 
-    // Find the next player who needs to draw
-    const activePlayers = this.state.players.filter(p => !p.folded && !p.sittingOut && !p.allIn);
-    const nextDrawer = this.findNextActivePlayer(this.state.activePlayerIndex);
+    // Find the next player who needs to draw (includes all-in players)
+    const nextDrawer = this.findNextDrawer(this.state.activePlayerIndex);
 
     // Check if we've gone around the table (everyone has drawn this round)
     const nextDrawerAlreadyDrawn = nextDrawer !== -1 && this.hasDrawnThisRound(this.state.players[nextDrawer].id);
@@ -244,17 +283,22 @@ export abstract class BaseDrawGame extends BaseGame {
         return this.resolveShowdown();
       }
 
+      // Check how many players can bet (excludes all-in)
+      const canBet = this.state.players.filter(p => !p.folded && !p.sittingOut && !p.allIn);
+
+      if (canBet.length <= 1) {
+        // Skip betting — but if draws remain, advance to next draw
+        if (this.currentDrawIndex < this.maxDraws) {
+          return this.advanceToNextDraw();
+        }
+        return this.resolveShowdown();
+      }
+
       // Move to post-draw betting
       this.state.phase = nextBettingPhase;
       this.phaseStartActionIndex = this.state.actionHistory.length;
-      this.state.playersAtStreetStart = activePlayers.filter(p => !p.allIn).length;
+      this.state.playersAtStreetStart = canBet.length;
       this.setFirstActorForStreet();
-
-      // If only one player can act, go to showdown
-      const canAct = this.state.players.filter(p => !p.folded && !p.sittingOut && !p.allIn);
-      if (canAct.length <= 1) {
-        return this.resolveShowdown();
-      }
 
       return false;
     }
@@ -278,6 +322,19 @@ export abstract class BaseDrawGame extends BaseGame {
         return true;
       }
     }
+    return false;
+  }
+
+  /**
+   * Skip betting and advance directly to the next draw phase.
+   * Used when not enough players can bet (all-in scenario) but draws remain.
+   * All players (including all-in) still participate in draws.
+   */
+  private advanceToNextDraw(): boolean {
+    const drawPhase = this.currentDrawIndex === 1 ? GamePhase.Drawing2 : GamePhase.Drawing3;
+    this.state.phase = drawPhase;
+    this.phaseStartActionIndex = this.state.actionHistory.length;
+    this.setFirstDrawer();
     return false;
   }
 

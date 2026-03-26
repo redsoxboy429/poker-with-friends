@@ -451,9 +451,12 @@ function PlayerSeat({
   const statusBadge = player.folded ? (
     <span className="text-[10px] text-red-400 font-semibold">FOLD</span>
   ) : player.allIn ? (
-    <span className="text-[10px] text-amber-400 font-bold animate-pulse">
-      ALL IN
-    </span>
+    <div className="flex items-center gap-1.5">
+      {drawBadge}
+      <span className="text-[10px] text-amber-400 font-bold animate-pulse">
+        ALL IN
+      </span>
+    </div>
   ) : actionStyle ? (
     <div className="flex items-center gap-1.5">
       {drawBadge}
@@ -1723,7 +1726,7 @@ export default function App() {
               } else {
                 // Normal betting
                 const actions = game.getAvailableActions();
-                const botAction = getBotAction(state, actions);
+                const botAction = getBotAction(state, actions, activePlayer.name);
 
                 game.act(activePlayer.id, botAction.type, botAction.amount);
                 const displayType = formatActionType(botAction.type, state.phase);
@@ -2571,7 +2574,7 @@ export default function App() {
               return (
                 <div
                   key={`win-chips-${w.playerId}-${idx}`}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 z-20 transition-all duration-700 ease-out"
+                  className="absolute -translate-x-1/2 -translate-y-1/2 z-[5] transition-all duration-700 ease-out"
                   style={{
                     left: `${chipX}%`,
                     top: `${chipY}%`,

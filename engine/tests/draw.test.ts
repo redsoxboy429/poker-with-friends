@@ -392,7 +392,7 @@ describe('TwoSevenTDGame', () => {
     expect(state.drawsRemaining).toBe(1);
   });
 
-  it('handles all-in during drawing (skips remaining draws)', () => {
+  it('handles all-in during betting — draws still happen', () => {
     const players = makePlayers(2);
     const game = new TwoSevenTDGame(TD_CONFIG, players, 0);
     game.start();
@@ -400,7 +400,6 @@ describe('TwoSevenTDGame', () => {
     // Pre-draw betting: go all-in via multiple raises in fixed-limit
     let state = game.getState();
     let activeId = state.players[state.activePlayerIndex].id;
-    const otherId = state.players[1 - state.activePlayerIndex].id;
 
     // Keep raising to go all-in (fixed-limit betting)
     while (state.players.find(p => !p.allIn && !p.folded && p.chips > 0)) {
@@ -418,7 +417,21 @@ describe('TwoSevenTDGame', () => {
     }
 
     state = game.getState();
-    // Should move to showdown when all-in during preflop
+    // Both all-in — should enter draw phase, not showdown
+    // All-in players still get to draw in draw poker
+    expect(state.phase).toBe(GamePhase.Drawing1);
+
+    // Both players draw (stand pat), and draws continue through all 3 rounds
+    for (let draw = 0; draw < 3; draw++) {
+      for (let i = 0; i < 2; i++) {
+        state = game.getState();
+        if (state.phase === GamePhase.Showdown || state.phase === GamePhase.Complete) break;
+        activeId = state.players[state.activePlayerIndex].id;
+        game.discard(activeId, []); // stand pat
+      }
+    }
+
+    state = game.getState();
     expect([GamePhase.Showdown, GamePhase.Complete]).toContain(state.phase);
   });
 

@@ -503,8 +503,11 @@ export function createGame(
 export function getBotAction(
   state: HandState,
   actions: AvailableActions,
+  playerName?: string,
 ): { type: ActionType; amount?: number } {
   const rand = Math.random();
+  // Charlie never folds — always calls or raises (for testing side pots)
+  const neverFold = playerName === 'Charlie';
 
   // If can check, usually check (70%), sometimes bet (30%)
   if (actions.canCheck) {
@@ -516,13 +519,14 @@ export function getBotAction(
   }
 
   // Facing a bet: fold 25%, call 55%, raise 20%
-  if (rand < 0.25 && actions.canFold) {
+  if (rand < 0.25 && actions.canFold && !neverFold) {
     return { type: ActionType.Fold };
   }
   if (rand < 0.80 || !actions.canRaise) {
     if (actions.canCall) {
       return { type: ActionType.Call };
     }
+    if (neverFold && actions.canCall) return { type: ActionType.Call };
     return { type: ActionType.Fold };
   }
   // Raise min

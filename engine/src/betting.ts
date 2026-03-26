@@ -244,8 +244,26 @@ export function collectBets(players: PlayerState[], existingPots: Pot[]): Pot[] 
     player.bet = 0;
   }
 
+  // Return uncallable excess: if any pot has only 1 eligible player, return the
+  // money to that player's stack. This happens when you bet more than the only
+  // remaining opponent can cover — the excess comes straight back, no side pot.
+  const finalPots: Pot[] = [];
+  for (const pot of newPots) {
+    if (pot.eligiblePlayerIds.length === 1 && pot.amount > 0.001) {
+      const player = players.find(p => p.id === pot.eligiblePlayerIds[0]);
+      if (player) {
+        player.chips += pot.amount;
+        if (player.allIn && player.chips > 0) {
+          player.allIn = false;
+        }
+      }
+    } else {
+      finalPots.push(pot);
+    }
+  }
+
   // Filter out any pots with 0 or near-zero amount (floating point cleanup)
-  return newPots.filter(p => p.amount > 0.001);
+  return finalPots.filter(p => p.amount > 0.001);
 }
 
 /**
