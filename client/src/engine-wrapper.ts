@@ -4,7 +4,7 @@
 // Runs the game engine locally, manages bot actions, and exposes
 // a simple interface for the UI to interact with.
 
-import type { BaseGame } from '@engine/games/base.ts';
+import type { BaseGame, WinnerInfo } from '@engine/games/base.ts';
 import { BaseDrawGame } from '@engine/games/draw-base.ts';
 import { BaseDrawmahaGame } from '@engine/games/drawmaha-base.ts';
 import { createGame } from '@engine/factory.ts';
@@ -29,7 +29,7 @@ import {
   type GameSessionState,
 } from '@engine/session.ts';
 
-export type { HandState, AvailableActions, PlayerState, GameSessionConfig, GameSessionState };
+export type { HandState, AvailableActions, PlayerState, GameSessionConfig, GameSessionState, WinnerInfo };
 export { GameVariant, GamePhase, ActionType, BettingStructure, GameSession, GameMode, HORSE_ROTATION, EIGHT_GAME_ROTATION, NINE_GAME_ROTATION };
 
 /** Human-readable display names for each variant */

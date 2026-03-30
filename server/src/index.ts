@@ -5,6 +5,8 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { RoomManager } from './room-manager.js';
 import { GameController } from './game-controller.js';
 import { getPlayerView } from './state-filter.js';
@@ -12,6 +14,11 @@ import type { ClientToServerEvents, ServerToClientEvents, RoomSettings } from '.
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Resolve __dirname for ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
@@ -28,10 +35,30 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 
 const roomManager = new RoomManager();
 
-// Health check
-app.get('/', (_req, res) => {
-  res.json({ status: 'ok', rooms: 0 });
+// ============================================================
+// Static file serving (production) — serve built client
+// ============================================================
+
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+
+// Health check (always available)
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', rooms: roomManager.getRoomCount() });
 });
+
+// Serve client static files in production
+if (NODE_ENV === 'production') {
+  app.use(express.static(clientDistPath));
+}
+
+// SPA catch-all — serve index.html for all non-API routes (production)
+// Must come after static middleware and API routes
+// Express 5 requires named wildcard params: {*path}
+if (NODE_ENV === 'production') {
+  app.get('{*path}', (_req, res) => {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // ============================================================
 // Socket.io connection handler

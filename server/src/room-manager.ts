@@ -299,4 +299,9 @@ export class RoomManager {
   getConnectedPlayerCount(room: Room): number {
     return [...room.players.values()].filter(p => p.connected && !p.sittingOut).length;
   }
+
+  /** Get total active room count */
+  getRoomCount(): number {
+    return this.rooms.size;
+  }
 }
