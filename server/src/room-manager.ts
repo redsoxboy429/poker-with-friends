@@ -48,15 +48,16 @@ export class RoomManager {
       disconnectTimers: new Map(),
     };
 
-    // Host sits at seat 0
+    // Host joins at seat 0, unseated until they buy in
     const hostPlayer: RoomPlayer = {
       socketId: hostSocketId,
       name: hostName,
       seatIndex: 0,
-      chips: settings.startingChips,
+      chips: 0,
       connected: true,
       playerId: 'p0',
       sittingOut: false,
+      seated: false,
     };
     room.players.set(hostSocketId, hostPlayer);
     room.seatMap[0] = hostSocketId;
@@ -111,10 +112,11 @@ export class RoomManager {
       socketId,
       name: playerName,
       seatIndex,
-      chips: room.settings.startingChips,
+      chips: 0,
       connected: true,
       playerId,
       sittingOut: false,
+      seated: false,
     };
 
     room.players.set(socketId, newPlayer);
@@ -254,6 +256,7 @@ export class RoomManager {
         connected: p.connected,
         isHost: p.socketId === room.hostSocketId,
         sittingOut: p.sittingOut,
+        seated: p.seated,
       }));
 
     return {
@@ -274,13 +277,22 @@ export class RoomManager {
     if (room.state !== 'lobby') throw new Error('Cannot change settings while playing');
 
     Object.assign(room.settings, updates);
+  }
 
-    // If starting chips changed, update all players' chips
-    if (updates.startingChips !== undefined) {
-      for (const player of room.players.values()) {
-        player.chips = updates.startingChips;
-      }
-    }
+  /** Sit down at the table with a buy-in. Returns the chip amount. */
+  sitDown(socketId: string, buyInBB: number): number {
+    const room = this.getRoomForSocket(socketId);
+    if (!room) throw new Error('Not in a room');
+    const player = room.players.get(socketId);
+    if (!player) throw new Error('Player not found');
+    if (player.seated) throw new Error('Already seated');
+
+    // Clamp to 50-300 BB range
+    const clampedBB = Math.max(50, Math.min(300, buyInBB));
+    const chips = clampedBB * room.settings.bigBlind;
+    player.chips = chips;
+    player.seated = true;
+    return chips;
   }
 
   /** Get connected player count for a room */

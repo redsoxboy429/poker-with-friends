@@ -37,6 +37,7 @@ export interface RoomPlayer {
   connected: boolean;
   playerId: string;               // Engine player ID (p0, p1, etc.)
   sittingOut: boolean;
+  seated: boolean;                // Has bought in and is ready to play
 }
 
 export interface RoomStateView {
@@ -49,6 +50,7 @@ export interface RoomStateView {
     connected: boolean;
     isHost: boolean;
     sittingOut: boolean;
+    seated: boolean;
   }>;
   settings: RoomSettings;
   state: 'lobby' | 'playing';
@@ -73,6 +75,7 @@ export interface PlayerStateView extends Omit<PlayerState, 'holeCards'> {
 export interface ClientToServerEvents {
   'create-room': (data: { playerName: string; settings: RoomSettings }) => void;
   'join-room': (data: { playerName: string; roomCode: string }) => void;
+  'sit-down': (data: { buyInBB: number }) => void;
   'leave-room': () => void;
   'action': (data: { type: ActionType; amount?: number }) => void;
   'discard': (data: { cardIndices: number[] }) => void;

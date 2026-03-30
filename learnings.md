@@ -64,3 +64,31 @@ Append-only log of session learnings. Reviewed during /weekly-review.
 - Decided: Badeucy/Badacey win display shows "BADUGI" / "LOW" columns, not "HIGH" / "LOW".
 - Taste: Josh wants audit bots run proactively and frequently. Don't test the UI yourself — Josh tests, Claude audits code. Always ask clarification on poker rules rather than assume.
 - Next: Test all new PL DD variants + Limit Omaha High + 3-step selector. Open items: busted blind logic, confirm buyout flow, sit-out functionality. Push to GitHub.
+
+## 2026-03-27 — Phase 3 multiplayer client buildout
+
+**Project:** Mixed Game Poker
+**Duration:** Deep session
+
+- Built: Component extraction from App.tsx (CardDisplay, PlayerSeat, ActionPanel, BetChip, PotDisplay, WinDisplay, GameLog → components/), horizontal chip stacking with 0.50 denomination, SocketProvider context pattern, LobbyPage with 3-step variant picker + limit fields, MultiplayerTable consuming shared socket, react-router routing (/, /room/:code, /practice)
+- Hard: Chip positioning — went through 3 iterations (vertical overlap with pot → too far down behind cards → horizontal layout solved it). Socket sharing across routes — useSocket as standalone hook created new connections per page; had to refactor to React Context provider pattern
+- Learned: Socket.io connections MUST be shared via Context when using react-router, not per-component hooks — each useSocket() call creates a separate connection that doesn't share state across route changes
+- Learned: Vite HMR can cause spurious React hook-order errors when refactoring hooks to contexts; a full dev server restart clears the stale module cache
+- Decided: Default game mode is Dealer's Choice (not Specific Game) — matches how Josh's group actually plays
+- Decided: Player names persisted to localStorage — no accounts, just convenience for a friends game
+- Taste: Josh prefers horizontal chip spread over vertical stacking. Pink chip for 0.50 denomination between white (1) and blue (0.25)
+- Next: Start Game button doesn't work yet (server-side start-hand handler needs debugging). Join Room tab needs buy-in field. Both create and join flows should let player choose buy-in amount in lobby before sitting down. Then deploy to Railway/Vercel for real multi-device testing
+
+## 2026-03-30 — Pot display bug fix + roadmap planning
+
+**Project:** Mixed Game Poker
+**Duration:** Medium session
+
+- Built: Fixed two pot display bugs — (1) fold-win showing "Pot: 0 / You win 0" because collectBets returned single-eligible pots to player stack before totalWon was calculated, (2) all-in runout pots disappearing because engine cleared state.pots after resolveShowdown. Final fix: engine keeps pots in state after showdown (display-only, chips already distributed), pots reset naturally on next startHand(). Test helpers updated to exclude display pots from chip conservation checks.
+- Hard: Went through 3 failed approaches on the all-in pot bug before landing on the right one. First tried client-side pot reconstruction from winners data (lost side pot structure). Then tried client-side ref snapshots before act() (still lost pots from final collectBets). Final correct approach: just keep pots in engine + fix test helpers. Simplest solution was the last one tried.
+- Decided: Abstract Factory pattern NOT needed for the poker engine. Current Template Method + inheritance hierarchy is the correct pattern — no separable component families to mix/match.
+- Decided: Multiplayer flow mirrors PokerNow: host creates room → gets link/code → players join with name+code → buy-in happens AT the table (not lobby) → host starts game.
+- Decided: Feature roadmap split into Tier 1 (pre-launch) and Tier 2 (post-launch) in ROADMAP.md. No for MVP: run it twice, spectator, straddle, timer, sound, rabbit hunting, hand replay.
+- Taste: Don't test visuals yourself — only Josh tests visuals. Always read existing code, memory, and context thoroughly before making changes. Added to both vault/working-protocols.md and poker/CLAUDE.md.
+- Housekeeping: Moved all completed phase checklists from CLAUDE.md to ROADMAP.md (completed milestones section). CLAUDE.md cut from 276 → ~120 lines.
+- Next: Session 2 remaining items (Start Game handler, buy-in at table), then Session 3 pre-launch features + deploy.

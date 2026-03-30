@@ -49,6 +49,7 @@ export { PLBadaceyDDGame } from './games/pl-badacey-dd.js';
 export { PLArchieDDGame } from './games/pl-archie-dd.js';
 export { PLTenThirtyDDGame } from './games/pl-ten-thirty-dd.js';
 export { LimitOmahaHighGame } from './games/limit-omaha-high.js';
+export { createGame } from './factory.js';
 export {
   GameSession,
   GameMode,

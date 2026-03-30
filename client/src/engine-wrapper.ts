@@ -4,34 +4,10 @@
 // Runs the game engine locally, manages bot actions, and exposes
 // a simple interface for the UI to interact with.
 
-import { NLHGame } from '@engine/games/nlh.ts';
-import { PLOGame } from '@engine/games/plo.ts';
-import { RazzGame } from '@engine/games/razz.ts';
-import { LHEGame } from '@engine/games/lhe.ts';
-import { StudGame } from '@engine/games/stud.ts';
-import { StudHiLoGame } from '@engine/games/stud-hilo.ts';
-import { PLO8Game } from '@engine/games/plo8.ts';
-import { O8Game } from '@engine/games/o8.ts';
-import { TwoSevenSDGame } from '@engine/games/27sd.ts';
-import { TwoSevenTDGame } from '@engine/games/27td.ts';
-import { BadugiGame } from '@engine/games/badugi.ts';
-import { BadeucyGame } from '@engine/games/badeucy.ts';
-import { BadaceyGame } from '@engine/games/badacey.ts';
-import { ArchieGame } from '@engine/games/archie.ts';
-import { DrawmahaHighGame } from '@engine/games/drawmaha-high.ts';
-import { Drawmaha27Game } from '@engine/games/drawmaha-27.ts';
-import { DrawmahaA5Game } from '@engine/games/drawmaha-a5.ts';
-import { Drawmaha49Game } from '@engine/games/drawmaha-49.ts';
-import { TenThirtyGame } from '@engine/games/ten-thirty.ts';
-import { PLBadugiDDGame } from '@engine/games/pl-badugi-dd.ts';
-import { PLBadeucyDDGame } from '@engine/games/pl-badeucy-dd.ts';
-import { PLBadaceyDDGame } from '@engine/games/pl-badacey-dd.ts';
-import { PLArchieDDGame } from '@engine/games/pl-archie-dd.ts';
-import { PLTenThirtyDDGame } from '@engine/games/pl-ten-thirty-dd.ts';
-import { LimitOmahaHighGame } from '@engine/games/limit-omaha-high.ts';
 import type { BaseGame } from '@engine/games/base.ts';
 import { BaseDrawGame } from '@engine/games/draw-base.ts';
 import { BaseDrawmahaGame } from '@engine/games/drawmaha-base.ts';
+import { createGame } from '@engine/factory.ts';
 import {
   type PlayerState,
   type TableConfig,
@@ -424,77 +400,8 @@ export function getTableConfig(variant: GameVariant): TableConfig {
   }
 }
 
-/** Create a new game instance */
-export function createGame(
-  variant: GameVariant,
-  players: PlayerState[],
-  buttonIndex: number,
-  customConfig?: TableConfig,
-): BaseGame {
-  const config = customConfig || getTableConfig(variant);
-  switch (variant) {
-    case GameVariant.NLH:
-      return new NLHGame(config, players, buttonIndex);
-    case GameVariant.PLO:
-      return new PLOGame(config, players, buttonIndex);
-    case GameVariant.LimitHoldem:
-      return new LHEGame(config, players, buttonIndex);
-    case GameVariant.OmahaHiLo:
-      return new O8Game(config, players, buttonIndex);
-    case GameVariant.PLOHiLo:
-      return new PLO8Game(config, players, buttonIndex);
-    case GameVariant.Razz:
-      return new RazzGame(config, players, buttonIndex);
-    case GameVariant.Stud:
-      return new StudGame(config, players, buttonIndex);
-    case GameVariant.StudHiLo:
-      return new StudHiLoGame(config, players, buttonIndex);
-    case GameVariant.TwoSevenSD:
-      return new TwoSevenSDGame(config, players, buttonIndex);
-    case GameVariant.TwoSevenTD:
-      return new TwoSevenTDGame(config, players, buttonIndex);
-    case GameVariant.Badugi:
-      return new BadugiGame(config, players, buttonIndex);
-    case GameVariant.Badeucy:
-      return new BadeucyGame(config, players, buttonIndex);
-    case GameVariant.Badacey:
-      return new BadaceyGame(config, players, buttonIndex);
-    case GameVariant.Archie:
-      return new ArchieGame(config, players, buttonIndex);
-    case GameVariant.DrawmahaHigh:
-      return new DrawmahaHighGame(config, players, buttonIndex);
-    case GameVariant.Drawmaha27:
-      return new Drawmaha27Game(config, players, buttonIndex);
-    case GameVariant.DrawmahaA5:
-      return new DrawmahaA5Game(config, players, buttonIndex);
-    case GameVariant.Drawmaha49:
-      return new Drawmaha49Game(config, players, buttonIndex);
-    case GameVariant.LimitDrawmahaHigh:
-      return new DrawmahaHighGame(config, players, buttonIndex);
-    case GameVariant.LimitDrawmaha27:
-      return new Drawmaha27Game(config, players, buttonIndex);
-    case GameVariant.LimitDrawmahaA5:
-      return new DrawmahaA5Game(config, players, buttonIndex);
-    case GameVariant.LimitDrawmaha49:
-      return new Drawmaha49Game(config, players, buttonIndex);
-    case GameVariant.TenThirtyDraw:
-      return new TenThirtyGame(config, players, buttonIndex);
-    case GameVariant.PLBadugiDD:
-      return new PLBadugiDDGame(config, players, buttonIndex);
-    case GameVariant.PLBadeucyDD:
-      return new PLBadeucyDDGame(config, players, buttonIndex);
-    case GameVariant.PLBadaceyDD:
-      return new PLBadaceyDDGame(config, players, buttonIndex);
-    case GameVariant.PLArchieDD:
-      return new PLArchieDDGame(config, players, buttonIndex);
-    case GameVariant.PLTenThirtyDD:
-      return new PLTenThirtyDDGame(config, players, buttonIndex);
-    case GameVariant.LimitOmahaHigh:
-      return new LimitOmahaHighGame(config, players, buttonIndex);
-    default:
-      return new NLHGame(config, players, buttonIndex);
-  }
-}
+/** Create a new game instance (delegates to engine factory) */
+export { createGame } from '@engine/factory.ts';
 
 /**
  * Simple bot AI — makes reasonable but not optimal decisions.

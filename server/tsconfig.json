@@ -10,7 +10,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "paths": {
-      "poker-engine": ["../engine/src/index.ts"]
+      "poker-engine": ["../engine/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*"],

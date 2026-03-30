@@ -312,7 +312,7 @@ export function evaluate5CardLow(cards: Card[]): LowHandResult {
   }
 
   const description = sortedCards
-    .map(c => c.rank === Rank.Ace ? 'A' : (c.rank <= 10 ? String(c.rank) : { 11: 'J', 12: 'Q', 13: 'K' }[c.rank]))
+    .map(c => c.rank === Rank.Ace ? 'A' : (c.rank <= 10 ? String(c.rank) : ({ 11: 'J', 12: 'Q', 13: 'K' } as Record<number, string>)[c.rank]))
     .reverse()
     .join('-');
 
@@ -534,7 +534,7 @@ export function evaluate5Card27Low(cards: Card[]): LowHandResult {
 
   // Build description
   const description = sortedCards
-    .map(c => c.rank <= 10 ? String(c.rank) : { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }[c.rank])
+    .map(c => c.rank <= 10 ? String(c.rank) : ({ 11: 'J', 12: 'Q', 13: 'K', 14: 'A' } as Record<number, string>)[c.rank])
     .reverse()
     .join('-');
 
