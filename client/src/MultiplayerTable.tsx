@@ -447,11 +447,15 @@ export default function MultiplayerTable() {
                 Next hand in <span className="text-white font-bold">{socketState.countdown}</span>…
               </span>
             )}
-            <button onClick={() => socketActions.startHand()}
-              className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-all active:scale-95"
-            >
-              Deal Next Hand
-            </button>
+            {socketState.isHost ? (
+              <button onClick={() => socketActions.startHand()}
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-all active:scale-95"
+              >
+                Deal Next Hand
+              </button>
+            ) : (
+              <span className="text-xs text-slate-500">Waiting for host to deal…</span>
+            )}
           </div>
         ) : gameState ? (
           <div className="text-center text-slate-600 text-xs py-2">

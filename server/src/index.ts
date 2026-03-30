@@ -131,21 +131,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ---- Start Hand ----
-  // First start: host only. Subsequent hands: any seated player can deal.
+  // ---- Start Hand (Host Only) ----
   socket.on('start-hand', () => {
     const room = roomManager.getRoomForSocket(socket.id);
     if (!room) return;
-
-    const player = room.players.get(socket.id);
-    if (!player?.seated) {
-      socket.emit('error', { message: 'You must be seated to start a hand' });
-      return;
-    }
-
-    // First start (lobby → playing) is host-only
-    if (room.state === 'lobby' && room.hostSocketId !== socket.id) {
-      socket.emit('error', { message: 'Only the host can start the game' });
+    if (room.hostSocketId !== socket.id) {
+      socket.emit('error', { message: 'Only the host can start hands' });
       return;
     }
 
