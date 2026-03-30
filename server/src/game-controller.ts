@@ -12,26 +12,20 @@ import {
   GameSession,
   GameMode,
   CAP_RULES,
+  createGame,
   type PlayerState,
   type TableConfig,
   type HandState,
   type AvailableActions,
   type BaseGame,
-  NLHGame, PLOGame, LHEGame, O8Game, PLO8Game,
-  RazzGame, StudGame, StudHiLoGame,
-  TwoSevenSDGame, TwoSevenTDGame,
-  BadugiGame, BadeucyGame, BadaceyGame, ArchieGame, TenThirtyGame,
-  DrawmahaHighGame, Drawmaha27Game, DrawmahaA5Game, Drawmaha49Game,
-  PLBadugiDDGame, PLBadeucyDDGame, PLBadaceyDDGame, PLArchieDDGame, PLTenThirtyDDGame,
-  LimitOmahaHighGame,
   BaseDrawGame,
   BaseDrawmahaGame,
 } from 'poker-engine';
 
 import type { WinnerInfo } from 'poker-engine';
-import type { Room, RoomPlayer } from './room-manager.js';
+import type { Room } from './room-manager.js';
 import { getPlayerView } from './state-filter.js';
-import type { PlayerView } from './types.js';
+import type { PlayerView, RoomPlayer } from './types.js';
 
 const AUTO_DEAL_DELAY_MS = 12_000;
 
@@ -60,6 +54,7 @@ export class GameController {
   private chipsBehind: Record<string, number> = {};
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private autoDealTimer: ReturnType<typeof setTimeout> | null = null;
+  private firstHand: boolean = true;
 
   constructor(room: Room, callbacks: GameCallbacks) {
     this.room = room;
@@ -73,10 +68,10 @@ export class GameController {
     this.session = new GameSession(sessionConfig);
   }
 
-  /** Get active (connected, not sitting out) players sorted by seat */
+  /** Get active (connected, seated, not sitting out) players sorted by seat */
   private getActivePlayers(): RoomPlayer[] {
     return [...this.room.players.values()]
-      .filter(p => p.connected && !p.sittingOut)
+      .filter(p => p.connected && p.seated && !p.sittingOut)
       .sort((a, b) => a.seatIndex - b.seatIndex);
   }
 
@@ -100,13 +95,20 @@ export class GameController {
     // Clear any countdown
     this.clearTimers();
 
+    // Update session player count (players may have joined/left since construction)
+    this.session.updatePlayerCount(activePlayers.length);
+
     // Advance button
     this.buttonIndex = (this.buttonIndex + 1) % activePlayers.length;
 
-    // Advance session (variant rotation)
-    if (this.session.getState().currentVariant !== null) {
+    // Advance session (variant rotation) — skip on first hand to avoid skipping variant #1
+    if (!this.firstHand && this.session.getState().currentVariant !== null) {
       this.session.advanceHand(this.buttonIndex);
     }
+    this.firstHand = false;
+
+    // Initialize Dealer's Choice on first hand (sets up chooser = button player)
+    this.session.initDealersChoice(this.buttonIndex);
 
     // Check if Dealer's Choice needs a pick
     const sessionState = this.session.getState();
@@ -116,6 +118,9 @@ export class GameController {
       if (chooserSeat !== null) {
         const chooser = activePlayers.find(p => p.seatIndex === chooserSeat);
         if (chooser) {
+          // Transition room to playing so all clients leave the lobby view
+          this.room.state = 'playing';
+          this.callbacks.broadcastRoomState(this.room.code);
           this.callbacks.sendDcChoose(chooser.socketId);
           return; // Wait for pick
         }
@@ -135,45 +140,54 @@ export class GameController {
   private dealHand(): void {
     const activePlayers = this.getActivePlayers();
     const variant = this.session.getCurrentVariant();
-    if (!variant) return;
+    if (!variant) {
+      this.callbacks.sendError(this.room.hostSocketId, 'No variant selected');
+      return;
+    }
 
-    // Build engine players from room players
-    const capBB = this.session.getCapBB();
-    const config = this.buildTableConfig(variant, capBB);
+    try {
+      // Build engine players from room players
+      const capBB = this.session.getCapBB();
+      const config = this.buildTableConfig(variant, capBB);
 
-    const enginePlayers: PlayerState[] = activePlayers.map((rp, i) => {
-      let chips = rp.chips;
+      const enginePlayers: PlayerState[] = activePlayers.map((rp, i) => {
+        let chips = rp.chips;
 
-      // Apply cap if needed
-      if (capBB && config.bigBlind > 0) {
-        const maxChips = capBB * config.bigBlind;
-        if (chips > maxChips) {
-          this.chipsBehind[rp.playerId] = (this.chipsBehind[rp.playerId] || 0) + (chips - maxChips);
-          chips = maxChips;
+        // Apply cap if needed
+        if (capBB && config.bigBlind > 0) {
+          const maxChips = capBB * config.bigBlind;
+          if (chips > maxChips) {
+            this.chipsBehind[rp.playerId] = (this.chipsBehind[rp.playerId] || 0) + (chips - maxChips);
+            chips = maxChips;
+          }
         }
-      }
 
-      return {
-        id: rp.playerId,
-        name: rp.name,
-        chips,
-        holeCards: [],
-        bet: 0,
-        totalBet: 0,
-        folded: false,
-        allIn: false,
-        sittingOut: false,
-        seatIndex: rp.seatIndex,
-      };
-    });
+        return {
+          id: rp.playerId,
+          name: rp.name,
+          chips,
+          holeCards: [],
+          bet: 0,
+          totalBet: 0,
+          folded: false,
+          allIn: false,
+          sittingOut: false,
+          seatIndex: rp.seatIndex,
+        };
+      });
 
-    // Create and start the game
-    this.game = createGame(variant, enginePlayers, this.buttonIndex, config);
-    this.game.start();
-    this.room.state = 'playing';
+      // Create and start the game
+      this.game = createGame(variant, enginePlayers, this.buttonIndex, config);
+      this.game.start();
+      this.room.state = 'playing';
 
-    // Broadcast initial state
-    this.broadcastState();
+      // Broadcast initial state
+      this.broadcastState();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to deal hand';
+      console.error('[game-controller] dealHand error:', message);
+      this.callbacks.sendError(this.room.hostSocketId, message);
+    }
   }
 
   /** Handle a player action (fold/check/call/bet/raise) */
@@ -423,50 +437,3 @@ export class GameController {
   }
 }
 
-// ============================================================
-// Game factory (server-side version of engine-wrapper createGame)
-// ============================================================
-
-function createGame(
-  variant: GameVariant,
-  players: PlayerState[],
-  buttonIndex: number,
-  config: TableConfig,
-): BaseGame {
-  switch (variant) {
-    case GameVariant.NLH: return new NLHGame(config, players, buttonIndex);
-    case GameVariant.PLO: return new PLOGame(config, players, buttonIndex);
-    case GameVariant.LimitHoldem: return new LHEGame(config, players, buttonIndex);
-    case GameVariant.OmahaHiLo: return new O8Game(config, players, buttonIndex);
-    case GameVariant.PLOHiLo: return new PLO8Game(config, players, buttonIndex);
-    case GameVariant.Razz: return new RazzGame(config, players, buttonIndex);
-    case GameVariant.Stud: return new StudGame(config, players, buttonIndex);
-    case GameVariant.StudHiLo: return new StudHiLoGame(config, players, buttonIndex);
-    case GameVariant.TwoSevenSD: return new TwoSevenSDGame(config, players, buttonIndex);
-    case GameVariant.TwoSevenTD: return new TwoSevenTDGame(config, players, buttonIndex);
-    case GameVariant.Badugi: return new BadugiGame(config, players, buttonIndex);
-    case GameVariant.Badeucy: return new BadeucyGame(config, players, buttonIndex);
-    case GameVariant.Badacey: return new BadaceyGame(config, players, buttonIndex);
-    case GameVariant.Archie: return new ArchieGame(config, players, buttonIndex);
-    case GameVariant.TenThirtyDraw: return new TenThirtyGame(config, players, buttonIndex);
-    case GameVariant.DrawmahaHigh:
-    case GameVariant.LimitDrawmahaHigh:
-      return new DrawmahaHighGame(config, players, buttonIndex);
-    case GameVariant.Drawmaha27:
-    case GameVariant.LimitDrawmaha27:
-      return new Drawmaha27Game(config, players, buttonIndex);
-    case GameVariant.DrawmahaA5:
-    case GameVariant.LimitDrawmahaA5:
-      return new DrawmahaA5Game(config, players, buttonIndex);
-    case GameVariant.Drawmaha49:
-    case GameVariant.LimitDrawmaha49:
-      return new Drawmaha49Game(config, players, buttonIndex);
-    case GameVariant.PLBadugiDD: return new PLBadugiDDGame(config, players, buttonIndex);
-    case GameVariant.PLBadeucyDD: return new PLBadeucyDDGame(config, players, buttonIndex);
-    case GameVariant.PLBadaceyDD: return new PLBadaceyDDGame(config, players, buttonIndex);
-    case GameVariant.PLArchieDD: return new PLArchieDDGame(config, players, buttonIndex);
-    case GameVariant.PLTenThirtyDD: return new PLTenThirtyDDGame(config, players, buttonIndex);
-    case GameVariant.LimitOmahaHigh: return new LimitOmahaHighGame(config, players, buttonIndex);
-    default: return new NLHGame(config, players, buttonIndex);
-  }
-}

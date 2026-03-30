@@ -45,9 +45,11 @@ function makePlayers(count: number, chips = 1000): PlayerState[] {
 
 function getTotalChips(state: Readonly<ReturnType<(typeof RazzGame)['prototype']['getState']>>): number {
   // Total chips = current player stacks + bets on table + pots
+  // After showdown, pots are display-only (already awarded to players), so exclude them.
   const playerChips = state.players.reduce((sum, p) => sum + p.chips, 0);
   const betsOnTable = state.players.reduce((sum, p) => sum + p.bet, 0);
-  const potChips = state.pots.reduce((sum, p) => sum + p.amount, 0);
+  const isComplete = state.phase === 'complete' || state.phase === 'showdown';
+  const potChips = isComplete ? 0 : state.pots.reduce((sum, p) => sum + p.amount, 0);
   return playerChips + betsOnTable + potChips;
 }
 

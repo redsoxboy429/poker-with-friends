@@ -48,7 +48,8 @@ function makePlayers(count: number, chips = 1000, startingIds?: string[]): Playe
 function getTotalChips(state: Readonly<ReturnType<(typeof NLHGame)['prototype']['getState']>>): number {
   const playerChips = state.players.reduce((sum, p) => sum + p.chips, 0);
   const betsOnTable = state.players.reduce((sum, p) => sum + p.bet, 0);
-  const potChips = state.pots.reduce((sum, p) => sum + p.amount, 0);
+  const isComplete = state.phase === 'complete' || state.phase === 'showdown';
+  const potChips = isComplete ? 0 : state.pots.reduce((sum, p) => sum + p.amount, 0);
   return playerChips + betsOnTable + potChips;
 }
 

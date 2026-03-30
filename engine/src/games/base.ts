@@ -382,17 +382,27 @@ export abstract class BaseGame {
 
   /** Award all pots to the last remaining player (everyone else folded) */
   protected awardPotToLastStanding(winner: PlayerState): void {
-    // Collect any outstanding bets
+    // Calculate total pot BEFORE collectBets (which returns single-eligible pots to player)
+    const outstandingBets = this.state.players.reduce((sum, p) => sum + p.bet, 0);
+    const existingPots = this.state.pots.reduce((sum, p) => sum + p.amount, 0);
+    const totalWon = outstandingBets + existingPots;
+
+    // Collect bets (returns excess to winner since they're the only eligible player)
     this.state.pots = collectBets(this.state.players, this.state.pots);
 
-    const totalWon = this.state.pots.reduce((sum, p) => sum + p.amount, 0);
-    winner.chips += totalWon;
+    // Award any remaining pots
+    const remainingPots = this.state.pots.reduce((sum, p) => sum + p.amount, 0);
+    winner.chips += remainingPots;
 
-    // Record winner (no hand description — won by fold)
+    // Record winner with the full pot amount (no hand description — won by fold)
     this._winners = [{ playerId: winner.id, name: winner.name, amount: totalWon }];
 
-    // Clear pots after awarding — chips have been distributed
-    this.state.pots = [];
+    // Keep pots for display (chips already distributed above).
+    // For fold wins, collectBets may have returned all pots to the winner (single eligible),
+    // so reconstruct a display pot with the full amount.
+    if (this.state.pots.length === 0 && totalWon > 0) {
+      this.state.pots = [{ amount: totalWon, eligiblePlayerIds: [winner.id] }];
+    }
     this.state.phase = GamePhase.Complete;
   }
 
@@ -487,8 +497,8 @@ export abstract class BaseGame {
       potLabel: w.potLabel,
     }));
 
-    // Clear pots after awarding — chips have been distributed
-    this.state.pots = [];
+    // Keep pots for display (chips already distributed to winners above).
+    // Pots reset on next startHand().
     this.state.phase = GamePhase.Complete;
     return true;
   }

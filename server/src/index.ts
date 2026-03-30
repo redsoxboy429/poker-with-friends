@@ -118,12 +118,34 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ---- Start Hand (Host Only) ----
+  // ---- Sit Down (buy in at the table) ----
+  socket.on('sit-down', ({ buyInBB }) => {
+    try {
+      roomManager.sitDown(socket.id, buyInBB);
+      const room = roomManager.getRoomForSocket(socket.id)!;
+      io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
+      console.log(`[room] ${roomManager.getPlayer(socket.id)?.name} sat down in room ${room.code} with ${buyInBB} BB`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to sit down';
+      socket.emit('error', { message });
+    }
+  });
+
+  // ---- Start Hand ----
+  // First start: host only. Subsequent hands: any seated player can deal.
   socket.on('start-hand', () => {
     const room = roomManager.getRoomForSocket(socket.id);
     if (!room) return;
-    if (room.hostSocketId !== socket.id) {
-      socket.emit('error', { message: 'Only the host can start hands' });
+
+    const player = room.players.get(socket.id);
+    if (!player?.seated) {
+      socket.emit('error', { message: 'You must be seated to start a hand' });
+      return;
+    }
+
+    // First start (lobby → playing) is host-only
+    if (room.state === 'lobby' && room.hostSocketId !== socket.id) {
+      socket.emit('error', { message: 'Only the host can start the game' });
       return;
     }
 
@@ -132,7 +154,13 @@ io.on('connection', (socket) => {
       room.gameController = new GameController(room, createCallbacks(room.code));
     }
 
-    room.gameController.startHand();
+    try {
+      room.gameController.startHand();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start hand';
+      console.error('[server] start-hand error:', message);
+      socket.emit('error', { message });
+    }
   });
 
   // ---- Player Action ----
