@@ -16,7 +16,13 @@ import type {
 import type { ActionType, AvailableActions, GameVariant, WinnerInfo } from './engine-wrapper';
 import React from 'react';
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+// In production (combined deploy), VITE_SERVER_URL is empty → connect to same origin.
+// In development, connects to the local server on :3001.
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || (
+  typeof window !== 'undefined' && window.location.port !== '5173'
+    ? window.location.origin  // Production: same-origin
+    : 'http://localhost:3001' // Dev: separate server
+);
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
