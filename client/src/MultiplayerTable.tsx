@@ -7,7 +7,7 @@
 // - No bot logic, no local game engine
 // - Animations are simplified (server broadcasts state; client renders)
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSocket } from './useSocket';
 import type { AvailableActions } from './engine-wrapper';
@@ -299,13 +299,10 @@ export default function MultiplayerTable() {
   // Server indices stay the same — this is purely a visual rotation.
   const mySeatIndex = gameState?.players.findIndex(p => p.id === myId) ?? 0;
   const n = gameState?.players.length ?? 0;
-  const rotatedPlayers = useMemo(
-    () => gameState ? rotateArray(gameState.players, mySeatIndex) : [],
-    [gameState, mySeatIndex]
-  );
+  const rotatedPlayers = gameState ? rotateArray(gameState.players, mySeatIndex) : [];
   // Remap server indices to rotated visual indices
-  const rotatedActiveIndex = gameState ? (gameState.activePlayerIndex - mySeatIndex + n + n) % n : -1;
-  const rotatedButtonIndex = gameState ? (gameState.buttonIndex - mySeatIndex + n + n) % n : -1;
+  const rotatedActiveIndex = n > 0 ? (gameState!.activePlayerIndex - mySeatIndex + n + n) % n : -1;
+  const rotatedButtonIndex = n > 0 ? (gameState!.buttonIndex - mySeatIndex + n + n) % n : -1;
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 overflow-hidden">
