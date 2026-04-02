@@ -92,3 +92,35 @@ Append-only log of session learnings. Reviewed during /weekly-review.
 - Taste: Don't test visuals yourself — only Josh tests visuals. Always read existing code, memory, and context thoroughly before making changes. Added to both vault/working-protocols.md and poker/CLAUDE.md.
 - Housekeeping: Moved all completed phase checklists from CLAUDE.md to ROADMAP.md (completed milestones section). CLAUDE.md cut from 276 → ~120 lines.
 - Next: Session 2 remaining items (Start Game handler, buy-in at table), then Session 3 pre-launch features + deploy.
+
+## 2026-03-31 — Phase 3: Start Game + Railway Deploy
+
+**Project:** poker
+**Duration:** deep session
+
+- Built: Fixed Start Game handler (DC init, stale player count, room state transition during DC choose), buy-in already worked, host-only deal restriction, limit stakes display in room lobby. Deployed to Railway with custom Dockerfile.
+- Hard: Railway/Nixpacks fight — Nixpacks is deprecated, ignores .node-version, pins stale Node 22.11 (Vite 8 needs 22.12+), production mode skips dev deps needed for build. Took 4 iterations before switching to custom Dockerfile.
+- Surprising: Nixpacks is deprecated on Railway with no clear migration path. Their docs still reference it heavily. Custom Dockerfile was the only reliable approach.
+- Learned: Railway builder precedence: Dockerfile > Railpack > Nixpacks. Vite 8 uses rolldown (native Linux bindings) instead of esbuild — problematic for CI/CD. Express 5 changed wildcard routes (`*` → `{*path}`).
+- Decided: Combined deploy (server serves client) on Railway, not split Vercel+Railway. Custom Dockerfile over Nixpacks. Host controls all game flow (start + deal).
+- Taste: Josh wants to approve all pushes — don't push without go-ahead. Josh does visual testing, Claude does code/logic review only.
+- Next: Test live with two devices on Railway URL. Then Session 3 roadmap items (reconnect handling, sit out, change game between hands, deploy polish).
+
+## 2026-04-02 — Phase 3 Session 3: Full Multiplayer Feature Port
+
+**Project:** poker
+**Duration:** deep session (multi-hour)
+
+- Built: Ported ALL features from App.tsx (local practice) to MultiplayerTable.tsx (multiplayer). This was a major rewrite — MultiplayerTable went from a stripped-down socket renderer to a full-featured table matching the local experience. Includes: all-in runout animation, community/hole card dealing animations, stud force-down, action badges, draw badges, hand descriptions, add-on modal, cash-out modal, session ledger, pause/resume countdown, Deal Now button, real showdown vs fold-win detection, showdown delay.
+- Built: Server payload enrichment — hand-state now includes `lastAction` (for badges) and `handDescription` (live hand ranking). hand-complete includes `handDescriptions` for showdown display. Add-on handler added. Pause/resume countdown added (server-side timer control, host only).
+- Built: Seat rotation — each player sees themselves at the bottom of the table. Purely visual, server state unchanged. Required rotating players array + remapping activePlayerIndex and buttonIndex.
+- Built: Direct room link join — navigating to `/room/ABCD` now prompts for a name and auto-joins instead of white screen. Saves name to localStorage.
+- Hard: useSocket.ts initially had 8 separate `useState` calls causing 3-5 unnecessary re-renders per socket event. Refactored to single `useReducer` — but initial attempt used `useMemo` after conditional returns, violating React Rules of Hooks and causing a crash (black screen). Fixed by removing useMemo entirely.
+- Hard: All-in runout went through 3 iterations. (1) Server never broadcast the runout board → added `broadcastState()` before `handleHandComplete()`. (2) That caused a DOUBLE runout (fast then slow) because client animated from both hand-state and hand-complete. (3) Removed the extra broadcastState but then the board froze because `gameState` rendered from `handState` which didn't have the runout cards. Final fix: use `finalState` for rendering when `isAllInRunout=true`.
+- Hard: Direct room link white screen was NOT a React/routing issue — the SPA catch-all worked and HTML was served. The real bug was Vite's `base: './'` (relative asset paths). At `/room/TEST`, the browser tried `/room/assets/index.js` instead of `/assets/index.js`. One-character fix: `'./'` → `'/'`.
+- Learned: **Multiplayer animations are fundamentally different from local.** App.tsx controls timing (it decides when to deal cards). MultiplayerTable receives state from the server — animations must be layered on top of received state, not control when state advances. Key pattern: buffer incoming state behind animation timers, use `visibleCommunityCount` and `dealtCardCounts` to gate what's shown.
+- Learned: **When porting features, do it all at once.** Incremental porting caused bugs where half-implemented features interacted badly (e.g., the double runout). A comprehensive port with audit is more reliable.
+- Learned: **Git workflow for production deploys**: work on branch → describe changes → get Josh's approval → push + merge to main → Railway auto-deploys. Small hotfixes can go direct to main with permission.
+- Decided: Default limits changed to .25/.50 blinds, 2/4 limits (was 1/2).
+- Decided: Railway server fine to leave running — idle cost is negligible.
+- Next: Josh doing thorough multi-device testing to find remaining bugs. Then remaining Session 3 items: reconnect handling, sit out, kick player, change game between hands.

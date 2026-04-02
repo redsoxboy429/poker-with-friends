@@ -2,7 +2,7 @@
 
 ## Current Work — Phase 3: WebSocket Multiplayer
 
-### Session 2 — Client Refactor (IN PROGRESS)
+### Session 2 — Client Refactor + Start Game (COMPLETE)
 - [x] Extract shared components from App.tsx (CardDisplay, PlayerSeat, ActionPanel, BetChip, PotDisplay, WinDisplay, GameLog → components/)
 - [x] Add socket.io-client, SocketProvider context (shared across routes)
 - [x] Create MultiplayerTable.tsx (same rendering, actions via socket instead of local engine)
@@ -11,24 +11,44 @@
 - [x] Dev/prod env config (.env, .env.production for server URL)
 - [x] Local practice mode still works at /practice
 - [x] Horizontal chip layout with 0.50 denomination (pink), bet positioning fix
-- [ ] **Start Game button handler** — server-side start-hand needs debugging
-- [ ] **Buy-in at the table** — not in lobby. Players see stakes first, then choose buy-in via Sit Down action
+- [x] Start Game button handler — DC init, stale player count, room state transition
+- [x] Buy-in at the table — players see stakes (blinds + limits), choose 50-300 BB, sit down
+- [x] Deploy to Railway (combined server+client, custom Dockerfile)
 - [ ] Room lobby polish: shareable link, host controls, seat layout
 
-### Session 3 — Deploy + Pre-Launch Features
-- [ ] Deploy server to Railway, client to Vercel
-- [ ] Test with real devices (phone + laptop on same room)
-- [ ] Seat approval (host approves join requests)
-- [ ] Rebuy/top-up over sockets (carry demo logic to multiplayer)
-- [ ] Sit out / sit back in (handle posting blinds on return)
+### Session 3 — Full Feature Port + Live Testing (IN PROGRESS)
+**Completed:**
+- [x] Port all App.tsx features to MultiplayerTable.tsx
+  - [x] All-in runout animation (street-by-street with 2s pauses)
+  - [x] Community card animation (180ms per card)
+  - [x] Hole card dealing animation (stud force-down + 600ms flip)
+  - [x] Action badges (FOLD/CHECK/CALL/BET/RAISE on player seats)
+  - [x] Draw badges (DREW X / STAND PAT)
+  - [x] Hand description display (during play + showdown)
+  - [x] Real showdown vs fold-win detection
+  - [x] Add-on modal (slider, server handler)
+  - [x] Cash-out / leave confirmation modal
+  - [x] Session ledger / tracker popup
+  - [x] Pause/resume countdown (host only)
+  - [x] Deal Now button (host skips countdown)
+  - [x] Showdown delay (800ms)
+- [x] Server payload enrichment (lastAction, handDescription, handDescriptions)
+- [x] Seat rotation (you always at bottom)
+- [x] Direct room link join (name prompt instead of white screen)
+- [x] useSocket.ts refactored to useReducer (fewer re-renders)
+- [x] Default limits: .25/.50 blinds, 2/4 limits
+- [x] Fix Vite base path for SPA routing (absolute asset paths)
+- [x] Copy link button in room lobby
+
+**Josh testing — awaiting bug reports.**
+
+**Remaining:**
 - [ ] Reconnect handling (browser refresh, wifi drop — recognize returning players)
+- [ ] Sit out / sit back in (handle posting blinds on return)
 - [ ] Kick player (host control)
-- [ ] Change game between hands without full reset (stacks preserved, ledger maintained)
-- [ ] Dealer's Choice chooser flow over sockets
-- [ ] Copy link / share button in room lobby
-- [ ] Player count display ("3/8 seated, waiting for host")
-- [ ] Hand log + simple text chat
+- [ ] Change game between hands without full reset
 - [ ] Busted blind logic (missed blinds handling)
+- [ ] Sound effects / your-turn notification (especially mobile)
 
 ### Session 4 — Security Audit
 - [ ] **Privacy hacker bot**: automated agent that joins a room and aggressively attempts to view other players' cards via JS console, DOM inspection, network sniffing, WebSocket message interception, etc. Must confirm that no opponent card data leaks to the client at any point during play (only at showdown).

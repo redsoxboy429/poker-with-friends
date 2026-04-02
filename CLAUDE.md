@@ -92,12 +92,19 @@ Adding a new variant: ~20-30 lines (constructor + evaluateHand override + factor
 
 **Phase 3 — WebSocket Multiplayer (IN PROGRESS)**
 
-Session 2 remaining work:
-- [ ] Start Game button handler (server-side debugging)
-- [ ] Buy-in at the table (not lobby — players see stakes, then Sit Down with chosen amount)
-- [ ] Room lobby polish (shareable link, host controls)
+**Deployed to Railway:** `poker-with-friends-production.up.railway.app` (custom Dockerfile, combined server+client). **Session 3 in progress — full feature port from local practice mode to multiplayer table.**
 
-See `ROADMAP.md` for full roadmap (Sessions 3-4, Tier 2 polish) and all completed milestones.
+Session 3 completed so far:
+- All App.tsx features ported to MultiplayerTable.tsx (animations, action badges, hand descriptions, add-on/cashout modals, session ledger, pause/resume countdown)
+- Server enriched: lastAction + handDescription in hand-state, handDescriptions in hand-complete, add-on handler, pause/resume countdown
+- Seat rotation (you're always at bottom of your own screen)
+- Direct room link join (name prompt instead of white screen)
+- useSocket.ts refactored to useReducer (performance)
+- Default limits: .25/.50 blinds, 2/4 limits
+
+**Next: Josh doing thorough multi-device testing. Then remaining Session 3 items (reconnect, sit out, change game, kick player).**
+
+See `ROADMAP.md` for full roadmap and all completed milestones.
 
 ## Key Rules to Get Right
 - **PLO must-use-2 rule:** Player MUST use exactly 2 of their 4 hole cards.
