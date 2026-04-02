@@ -803,8 +803,8 @@ export default function MultiplayerTable() {
         </div>
       </div>
 
-      {/* Hand description (during play) */}
-      {socketState.handDescription && gameState && !showdown && (
+      {/* Hand description (during play — hide during all-in runout since cards aren't all visible yet) */}
+      {socketState.handDescription && gameState && !showdown && !isAllInRunout && (
         <div className="flex-shrink-0 flex justify-center px-4 py-0.5">
           <span className="text-[11px] font-semibold text-amber-400/80 tracking-wide">
             {socketState.handDescription}
@@ -839,20 +839,19 @@ export default function MultiplayerTable() {
               </span>
             )}
             <div className="flex gap-2 items-center">
-              {socketState.isHost && (
+              {socketState.isHost ? (
                 <button onClick={() => socketActions.startHand()}
                   className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-all active:scale-95">
-                  Deal Next Hand
+                  Deal Now
                 </button>
+              ) : (
+                <span className="text-xs text-slate-500">Waiting for host to deal...</span>
               )}
               <button onClick={handleAddOnOpen}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs font-semibold transition-colors">
                 Add On
               </button>
             </div>
-            {!socketState.isHost && (
-              <span className="text-xs text-slate-500">Waiting for host to deal...</span>
-            )}
           </div>
         ) : gameState ? (
           <div className="text-center text-slate-600 text-xs py-2">

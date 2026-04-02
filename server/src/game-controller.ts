@@ -212,9 +212,8 @@ export class GameController {
     try {
       const done = this.game.act(player.playerId, type, amount);
       if (done) {
-        // Broadcast final state first (includes runout board for all-in scenarios)
-        // so clients see the community cards before the winner announcement
-        this.broadcastState();
+        // Don't broadcastState here — client handles runout animation
+        // from the finalState in hand-complete
         this.handleHandComplete();
       } else {
         this.broadcastState();
@@ -251,7 +250,6 @@ export class GameController {
     try {
       const done = (this.game as any).discard(player.playerId, cardIndices);
       if (done) {
-        this.broadcastState();
         this.handleHandComplete();
       } else {
         this.broadcastState();
@@ -276,7 +274,6 @@ export class GameController {
         if (actions.canFold) {
           const done = this.game.act(playerId, ActionType.Fold);
           if (done) {
-            this.broadcastState();
             this.handleHandComplete();
           } else {
             this.broadcastState();
@@ -284,7 +281,6 @@ export class GameController {
         } else if (actions.canCheck) {
           const done = this.game.act(playerId, ActionType.Check);
           if (done) {
-            this.broadcastState();
             this.handleHandComplete();
           } else {
             this.broadcastState();

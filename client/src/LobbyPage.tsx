@@ -32,8 +32,8 @@ export default function LobbyPage() {
   const [smallBlind, setSmallBlind] = useState(0.25);
   const [bigBlind, setBigBlind] = useState(0.5);
   // Limit game fields
-  const [smallBet, setSmallBet] = useState(1);
-  const [bigBet, setBigBet] = useState(2);
+  const [smallBet, setSmallBet] = useState(2);
+  const [bigBet, setBigBet] = useState(4);
 
   // Variant selection (for Specific Game mode)
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
