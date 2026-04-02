@@ -109,6 +109,10 @@ export default function MultiplayerTable() {
   const [showTracker, setShowTracker] = useState(false);
   const ledgerRef = useRef<Record<string, { totalBuyIn: number; totalBuyOut: number; name: string }>>({});
 
+  // --- Direct link join ---
+  const [directJoinName, setDirectJoinName] = useState(() => localStorage.getItem('poker-player-name') || '');
+  const [directJoinAttempted, setDirectJoinAttempted] = useState(false);
+
   // --- Refs for animation coordination ---
   const visibleCommunityCountRef = useRef(0);
   const dealtCardCountsRef = useRef<Record<string, number>>({});
@@ -463,13 +467,57 @@ export default function MultiplayerTable() {
   // Rendering setup
   // ============================================================
 
-  const gameState = showdown && socketState.finalState ? socketState.finalState : socketState.handState;
+  // Use finalState during showdown OR all-in runout animation (finalState has the full board)
+  const gameState = (showdown || isAllInRunout) && socketState.finalState ? socketState.finalState : socketState.handState;
   const roomState = socketState.roomState;
   const myId = socketState.yourPlayerId;
 
   // --- Early returns for non-game states ---
 
   if (!roomState) {
+    // If connected and have a room code from URL, show join prompt
+    if (socketState.status === 'connected' && code && !directJoinAttempted) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+          <h2 className="text-xl font-bold text-white mb-4">Join Room {code.toUpperCase()}</h2>
+          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 w-full max-w-xs">
+            <label className="text-xs font-semibold text-slate-300 block mb-1">Your Name</label>
+            <input
+              type="text"
+              value={directJoinName}
+              onChange={e => setDirectJoinName(e.target.value)}
+              placeholder="Enter your name"
+              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-white text-sm mb-3 focus:outline-none focus:border-emerald-500"
+              maxLength={20}
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter' && directJoinName.trim()) {
+                  localStorage.setItem('poker-player-name', directJoinName.trim());
+                  socketActions.joinRoom(directJoinName.trim(), code);
+                  setDirectJoinAttempted(true);
+                }
+              }}
+            />
+            <button
+              onClick={() => {
+                if (!directJoinName.trim()) return;
+                localStorage.setItem('poker-player-name', directJoinName.trim());
+                socketActions.joinRoom(directJoinName.trim(), code);
+                setDirectJoinAttempted(true);
+              }}
+              disabled={!directJoinName.trim()}
+              className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold text-sm transition-colors"
+            >
+              Join Room
+            </button>
+          </div>
+          <button onClick={() => navigate('/')} className="mt-4 text-slate-500 hover:text-slate-300 text-sm">
+            Back to Lobby
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
         <p className="text-slate-400 mb-4">Connecting to room {code}...</p>
