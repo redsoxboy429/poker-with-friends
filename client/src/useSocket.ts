@@ -3,8 +3,11 @@
 // ============================================================
 // Singleton socket managed via React Context. The provider lives
 // in main.tsx so the connection persists across route changes.
+//
+// Uses useReducer so each socket event triggers exactly ONE
+// re-render instead of 3-5 separate setState calls.
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type {
   ClientToServerEvents,
@@ -62,6 +65,110 @@ type SocketContextValue = [SocketState, SocketActions];
 
 const SocketContext = createContext<SocketContextValue | null>(null);
 
+// ============================================================
+// Reducer — single state update per socket event
+// ============================================================
+
+const INITIAL_STATE: SocketState = {
+  status: 'disconnected',
+  roomState: null,
+  handState: null,
+  availableActions: null,
+  isYourTurn: false,
+  isHost: false,
+  yourPlayerId: null,
+  winners: null,
+  finalState: null,
+  countdown: null,
+  dcChoosing: false,
+  error: null,
+};
+
+type SocketAction =
+  | { type: 'SET_STATUS'; status: ConnectionStatus }
+  | { type: 'ROOM_CREATED'; roomState: RoomStateView }
+  | { type: 'ROOM_JOINED'; roomState: RoomStateView; yourPlayerId: string }
+  | { type: 'ROOM_STATE'; roomState: RoomStateView; isHost: boolean }
+  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean }
+  | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView }
+  | { type: 'DC_CHOOSE' }
+  | { type: 'DC_PICKED' }
+  | { type: 'COUNTDOWN'; seconds: number }
+  | { type: 'ERROR'; message: string }
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'LEAVE_ROOM' }
+  | { type: 'DISCONNECT' };
+
+function socketReducer(state: SocketState, action: SocketAction): SocketState {
+  switch (action.type) {
+    case 'SET_STATUS':
+      return action.status === 'connected'
+        ? { ...state, status: action.status, error: null }
+        : { ...state, status: action.status };
+
+    case 'ROOM_CREATED':
+      return { ...state, roomState: action.roomState, yourPlayerId: 'p0', isHost: true };
+
+    case 'ROOM_JOINED':
+      return { ...state, roomState: action.roomState, yourPlayerId: action.yourPlayerId, isHost: false };
+
+    case 'ROOM_STATE':
+      return { ...state, roomState: action.roomState, isHost: action.isHost };
+
+    case 'HAND_STATE': {
+      const clearWinners = action.handState.phase !== 'complete' && action.handState.phase !== 'showdown';
+      return {
+        ...state,
+        handState: action.handState,
+        availableActions: action.availableActions,
+        isYourTurn: action.isYourTurn,
+        ...(clearWinners ? { winners: null, finalState: null } : {}),
+      };
+    }
+
+    case 'HAND_COMPLETE':
+      return {
+        ...state,
+        winners: action.winners,
+        finalState: action.finalState,
+        isYourTurn: false,
+        availableActions: null,
+      };
+
+    case 'DC_CHOOSE':
+      return { ...state, dcChoosing: true };
+
+    case 'DC_PICKED':
+      return { ...state, dcChoosing: false };
+
+    case 'COUNTDOWN':
+      return { ...state, countdown: action.seconds };
+
+    case 'ERROR':
+      return { ...state, error: action.message };
+
+    case 'CLEAR_ERROR':
+      return { ...state, error: null };
+
+    case 'LEAVE_ROOM':
+      return {
+        ...state,
+        roomState: null,
+        handState: null,
+        winners: null,
+        finalState: null,
+        yourPlayerId: null,
+        isHost: false,
+      };
+
+    case 'DISCONNECT':
+      return { ...INITIAL_STATE };
+
+    default:
+      return state;
+  }
+}
+
 /**
  * Provider component — wrap the app in this so all routes share one socket.
  */
@@ -85,93 +192,64 @@ export function useSocket(): SocketContextValue {
 
 function useSocketInternal(): SocketContextValue {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
-
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [roomState, setRoomState] = useState<RoomStateView | null>(null);
-  const [handState, setHandState] = useState<PlayerView | null>(null);
-  const [availableActions, setAvailableActions] = useState<AvailableActions | null>(null);
-  const [isYourTurn, setIsYourTurn] = useState(false);
-  const [yourPlayerId, setYourPlayerId] = useState<string | null>(null);
-  const [winners, setWinners] = useState<WinnerInfo[] | null>(null);
-  const [finalState, setFinalState] = useState<PlayerView | null>(null);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [isHost, setIsHost] = useState(false);
-  const [dcChoosing, setDcChoosing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(socketReducer, INITIAL_STATE);
 
   const connect = useCallback(() => {
     if (socketRef.current?.connected) return;
 
-    setStatus('connecting');
+    dispatch({ type: 'SET_STATUS', status: 'connecting' });
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SERVER_URL, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
     });
 
     socket.on('connect', () => {
-      setStatus('connected');
-      setError(null);
+      dispatch({ type: 'SET_STATUS', status: 'connected' });
     });
 
     socket.on('disconnect', () => {
-      setStatus('disconnected');
+      dispatch({ type: 'SET_STATUS', status: 'disconnected' });
     });
 
     // Room events
     socket.on('room-created', (data) => {
-      setRoomState(data.roomState);
-      setYourPlayerId('p0');
-      setIsHost(true);
+      dispatch({ type: 'ROOM_CREATED', roomState: data.roomState });
     });
 
     socket.on('room-joined', (data) => {
-      setRoomState(data.roomState);
-      setYourPlayerId(data.yourPlayerId);
-      setIsHost(false);
+      dispatch({ type: 'ROOM_JOINED', roomState: data.roomState, yourPlayerId: data.yourPlayerId });
     });
 
     socket.on('room-state', (data) => {
-      setRoomState(data);
-      // Update host status (may change if original host disconnects)
-      if (socket.id) {
-        const me = data.players.find(p => p.isHost);
-        // Check via hostSocketId — but client doesn't know its socketId easily
-        // Instead, check if our playerId matches the host player's
-        setIsHost(data.hostSocketId === socket.id);
-      }
+      dispatch({ type: 'ROOM_STATE', roomState: data, isHost: data.hostSocketId === socket.id });
     });
 
-    // Hand events
+    // Hand events — single dispatch per event (no more 5 separate setStates)
     socket.on('hand-state', (data) => {
-      setHandState(data.handState);
-      setAvailableActions(data.availableActions);
-      setIsYourTurn(data.isYourTurn);
-      // Clear winners when new hand state arrives (unless showdown)
-      if (data.handState.phase !== 'complete' && data.handState.phase !== 'showdown') {
-        setWinners(null);
-        setFinalState(null);
-      }
+      dispatch({
+        type: 'HAND_STATE',
+        handState: data.handState,
+        availableActions: data.availableActions,
+        isYourTurn: data.isYourTurn,
+      });
     });
 
     socket.on('hand-complete', (data) => {
-      setWinners(data.winners);
-      setFinalState(data.finalState);
-      setIsYourTurn(false);
-      setAvailableActions(null);
+      dispatch({ type: 'HAND_COMPLETE', winners: data.winners, finalState: data.finalState });
     });
 
     socket.on('dc-choose', () => {
-      setDcChoosing(true);
+      dispatch({ type: 'DC_CHOOSE' });
     });
 
     socket.on('countdown', (data) => {
-      setCountdown(data.seconds);
+      dispatch({ type: 'COUNTDOWN', seconds: data.seconds });
     });
 
     socket.on('error', (data) => {
-      setError(data.message);
+      dispatch({ type: 'ERROR', message: data.message });
       // Auto-clear errors after 5 seconds
-      setTimeout(() => setError(null), 5000);
+      setTimeout(() => dispatch({ type: 'CLEAR_ERROR' }), 5000);
     });
 
     socketRef.current = socket;
@@ -180,17 +258,7 @@ function useSocketInternal(): SocketContextValue {
   const disconnect = useCallback(() => {
     socketRef.current?.disconnect();
     socketRef.current = null;
-    setStatus('disconnected');
-    setRoomState(null);
-    setHandState(null);
-    setAvailableActions(null);
-    setIsYourTurn(false);
-    setIsHost(false);
-    setYourPlayerId(null);
-    setWinners(null);
-    setFinalState(null);
-    setCountdown(null);
-    setDcChoosing(false);
+    dispatch({ type: 'DISCONNECT' });
   }, []);
 
   // Clean up on unmount (app-level — only when entire app is destroyed)
@@ -214,12 +282,7 @@ function useSocketInternal(): SocketContextValue {
 
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('leave-room');
-    setRoomState(null);
-    setHandState(null);
-    setWinners(null);
-    setFinalState(null);
-    setYourPlayerId(null);
-    setIsHost(false);
+    dispatch({ type: 'LEAVE_ROOM' });
   }, []);
 
   const sendAction = useCallback((type: ActionType, amount?: number) => {
@@ -236,7 +299,7 @@ function useSocketInternal(): SocketContextValue {
 
   const pickVariant = useCallback((variant: GameVariant) => {
     socketRef.current?.emit('pick-variant', { variant });
-    setDcChoosing(false);
+    dispatch({ type: 'DC_PICKED' });
   }, []);
 
   const updateSettings = useCallback((settings: Partial<RoomSettings>) => {
@@ -254,21 +317,6 @@ function useSocketInternal(): SocketContextValue {
   const sitIn = useCallback(() => {
     socketRef.current?.emit('sit-in');
   }, []);
-
-  const state: SocketState = {
-    status,
-    roomState,
-    handState,
-    availableActions,
-    isYourTurn,
-    isHost,
-    yourPlayerId,
-    winners,
-    finalState,
-    countdown,
-    dcChoosing,
-    error,
-  };
 
   const actions: SocketActions = {
     connect,

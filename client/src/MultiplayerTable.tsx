@@ -7,7 +7,7 @@
 // - No bot logic, no local game engine
 // - Animations are simplified (server broadcasts state; client renders)
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSocket } from './useSocket';
 import type { AvailableActions } from './engine-wrapper';
@@ -32,6 +32,14 @@ import {
   DRAW_PHASES,
   formatActionType,
 } from './constants';
+
+/** Rotate an array so `startIndex` becomes index 0 */
+function rotateArray<T>(arr: T[], startIndex: number): T[] {
+  if (startIndex === 0 || arr.length === 0) return arr;
+  return [...arr.slice(startIndex), ...arr.slice(0, startIndex)];
+}
+
+const MAX_LOG_ENTRIES = 200;
 
 function CopyLinkButton({ link }: { link: string }) {
   const [copied, setCopied] = useState(false);
@@ -64,8 +72,14 @@ export default function MultiplayerTable() {
   const [winInfo, setWinInfo] = useState<WinEntry[]>([]);
 
   const addLog = useCallback((msg: string) => {
-    setLog(prev => [...prev, msg]);
+    setLog(prev => {
+      const next = [...prev, msg];
+      return next.length > MAX_LOG_ENTRIES ? next.slice(-MAX_LOG_ENTRIES) : next;
+    });
   }, []);
+
+  // Track previous hand state to detect phase/action changes for logging
+  const prevHandRef = useRef<typeof socketState.handState>(null);
 
   // Connect to server on mount
   useEffect(() => {
@@ -89,6 +103,24 @@ export default function MultiplayerTable() {
       addLog('--- Hand complete ---');
     }
   }, [socketState.winners, addLog]);
+
+  // Log hand state changes (phase transitions, new hands) for all players
+  useEffect(() => {
+    const curr = socketState.handState;
+    const prev = prevHandRef.current;
+    if (!curr) { prevHandRef.current = null; return; }
+
+    if (!prev) {
+      // First hand state — new hand started
+      addLog(`--- ${VARIANT_LABELS[curr.variant] || curr.variant} ---`);
+    } else if (prev.phase !== curr.phase) {
+      // Phase changed
+      const label = curr.phase === 'complete' ? 'Showdown' : curr.phase;
+      addLog(`Phase: ${label}`);
+    }
+
+    prevHandRef.current = curr;
+  }, [socketState.handState, addLog]);
 
   // Clear showdown on new hand
   useEffect(() => {
@@ -263,8 +295,17 @@ export default function MultiplayerTable() {
 
   const isDrawPhase = gameState && DRAW_PHASES.includes(gameState.phase);
 
-  // Find my seat index for rendering "You" at bottom
+  // Seat rotation: rotate players so current user is always at index 0 (bottom of screen).
+  // Server indices stay the same — this is purely a visual rotation.
   const mySeatIndex = gameState?.players.findIndex(p => p.id === myId) ?? 0;
+  const n = gameState?.players.length ?? 0;
+  const rotatedPlayers = useMemo(
+    () => gameState ? rotateArray(gameState.players, mySeatIndex) : [],
+    [gameState, mySeatIndex]
+  );
+  // Remap server indices to rotated visual indices
+  const rotatedActiveIndex = gameState ? (gameState.activePlayerIndex - mySeatIndex + n + n) % n : -1;
+  const rotatedButtonIndex = gameState ? (gameState.buttonIndex - mySeatIndex + n + n) % n : -1;
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 overflow-hidden">
@@ -363,13 +404,13 @@ export default function MultiplayerTable() {
             )}
           </div>
 
-          {/* Player seats */}
-          {gameState && gameState.players.map((player, i) => (
+          {/* Player seats — using rotated array so "you" is always at bottom */}
+          {gameState && rotatedPlayers.map((player, i) => (
             <PlayerSeat
               key={player.id}
               player={player}
-              isActive={i === gameState.activePlayerIndex && !showdown}
-              isDealer={i === gameState.buttonIndex}
+              isActive={i === rotatedActiveIndex && !showdown}
+              isDealer={i === rotatedButtonIndex}
               isHuman={player.id === myId}
               showCards={showdown && !player.folded}
               position={positions[i]}
@@ -381,16 +422,16 @@ export default function MultiplayerTable() {
             />
           ))}
 
-          {/* Bet chips */}
-          {gameState && !showdown && gameState.players.map((player, i) =>
+          {/* Bet chips — using rotated player order */}
+          {gameState && !showdown && rotatedPlayers.map((player, i) =>
             player.bet > 0 ? (
               <BetChip key={`bet-${player.id}`} amount={player.bet} position={betPositions[i]} />
             ) : null
           )}
 
-          {/* Win chips */}
+          {/* Win chips — find rotated index for positioning */}
           {gameState && showdown && winInfo.map((w, idx) => {
-            const playerIdx = gameState.players.findIndex(p => p.id === w.playerId);
+            const playerIdx = rotatedPlayers.findIndex(p => p.id === w.playerId);
             if (playerIdx === -1) return null;
             const seatPos = positions[playerIdx];
             const chipX = 50 + (seatPos[0] - 50) * 0.45;
@@ -459,7 +500,7 @@ export default function MultiplayerTable() {
           </div>
         ) : gameState ? (
           <div className="text-center text-slate-600 text-xs py-2">
-            Waiting for {gameState.players[gameState.activePlayerIndex]?.name ?? '...'}
+            Waiting for {rotatedPlayers[rotatedActiveIndex]?.name ?? '...'}
           </div>
         ) : null}
       </div>
