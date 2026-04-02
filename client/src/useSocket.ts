@@ -61,6 +61,8 @@ export interface SocketActions {
   pickVariant: (variant: GameVariant) => void;
   updateSettings: (settings: Partial<RoomSettings>) => void;
   addOn: (amount: number) => void;
+  pauseCountdown: () => void;
+  resumeCountdown: () => void;
   sitOut: () => void;
   sitIn: () => void;
 }
@@ -327,6 +329,14 @@ function useSocketInternal(): SocketContextValue {
     socketRef.current?.emit('add-on', { amount });
   }, []);
 
+  const pauseCountdown = useCallback(() => {
+    socketRef.current?.emit('pause-countdown');
+  }, []);
+
+  const resumeCountdown = useCallback(() => {
+    socketRef.current?.emit('resume-countdown');
+  }, []);
+
   const sitOut = useCallback(() => {
     socketRef.current?.emit('sit-out');
   }, []);
@@ -348,6 +358,8 @@ function useSocketInternal(): SocketContextValue {
     pickVariant,
     updateSettings,
     addOn,
+    pauseCountdown,
+    resumeCountdown,
     sitOut,
     sitIn,
   };

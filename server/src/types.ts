@@ -83,6 +83,8 @@ export interface ClientToServerEvents {
   'pick-variant': (data: { variant: GameVariant }) => void;
   'update-settings': (data: Partial<RoomSettings>) => void;
   'add-on': (data: { amount: number }) => void;
+  'pause-countdown': () => void;
+  'resume-countdown': () => void;
   'sit-out': () => void;
   'sit-in': () => void;
 }

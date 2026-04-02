@@ -838,12 +838,21 @@ export default function MultiplayerTable() {
                 Next hand in <span className="text-white font-bold">{socketState.countdown}</span>...
               </span>
             )}
+            {socketState.countdown === -1 && (
+              <span className="text-sm font-mono text-amber-400">Paused</span>
+            )}
             <div className="flex gap-2 items-center">
               {socketState.isHost ? (
-                <button onClick={() => socketActions.startHand()}
-                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-all active:scale-95">
-                  Deal Now
-                </button>
+                <>
+                  <button onClick={() => socketActions.startHand()}
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-all active:scale-95">
+                    Deal Now
+                  </button>
+                  <button onClick={() => socketState.countdown === -1 ? socketActions.resumeCountdown() : socketActions.pauseCountdown()}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs font-semibold transition-colors">
+                    {socketState.countdown === -1 ? 'Resume' : 'Pause'}
+                  </button>
+                </>
               ) : (
                 <span className="text-xs text-slate-500">Waiting for host to deal...</span>
               )}

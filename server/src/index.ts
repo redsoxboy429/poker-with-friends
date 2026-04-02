@@ -239,6 +239,21 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ---- Pause / Resume Countdown (Host Only) ----
+  socket.on('pause-countdown', () => {
+    const room = roomManager.getRoomForSocket(socket.id);
+    if (!room?.gameController) return;
+    if (room.hostSocketId !== socket.id) return;
+    room.gameController.pauseCountdown();
+  });
+
+  socket.on('resume-countdown', () => {
+    const room = roomManager.getRoomForSocket(socket.id);
+    if (!room?.gameController) return;
+    if (room.hostSocketId !== socket.id) return;
+    room.gameController.resumeCountdown();
+  });
+
   // ---- Add-On (top up chips between hands) ----
   socket.on('add-on', ({ amount }) => {
     const player = roomManager.getPlayer(socket.id);

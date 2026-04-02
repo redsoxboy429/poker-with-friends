@@ -56,6 +56,8 @@ export class GameController {
   private autoDealTimer: ReturnType<typeof setTimeout> | null = null;
   private firstHand: boolean = true;
   private lastActionIndex: number = 0; // Tracks action history for broadcasting
+  private countdownPaused: boolean = false;
+  private countdownRemaining: number = 0;
 
   constructor(room: Room, callbacks: GameCallbacks) {
     this.room = room;
@@ -382,19 +384,53 @@ export class GameController {
   /** Start auto-deal countdown */
   private startCountdown(): void {
     this.clearTimers();
+    this.countdownPaused = false;
 
-    let remaining = Math.floor(AUTO_DEAL_DELAY_MS / 1000);
-    this.callbacks.broadcastCountdown(this.room.code, remaining);
+    this.countdownRemaining = Math.floor(AUTO_DEAL_DELAY_MS / 1000);
+    this.callbacks.broadcastCountdown(this.room.code, this.countdownRemaining);
 
     this.countdownTimer = setInterval(() => {
-      remaining--;
-      if (remaining <= 0) {
+      this.countdownRemaining--;
+      if (this.countdownRemaining <= 0) {
         this.clearTimers();
         this.startHand();
       } else {
-        this.callbacks.broadcastCountdown(this.room.code, remaining);
+        this.callbacks.broadcastCountdown(this.room.code, this.countdownRemaining);
       }
     }, 1000);
+  }
+
+  /** Pause the auto-deal countdown (host only) */
+  pauseCountdown(): void {
+    if (!this.countdownTimer || this.countdownPaused) return;
+    clearInterval(this.countdownTimer);
+    this.countdownTimer = null;
+    this.countdownPaused = true;
+    // Broadcast 0 to indicate paused
+    this.callbacks.broadcastCountdown(this.room.code, -1);
+  }
+
+  /** Resume the auto-deal countdown (host only) */
+  resumeCountdown(): void {
+    if (!this.countdownPaused) return;
+    this.countdownPaused = false;
+
+    this.callbacks.broadcastCountdown(this.room.code, this.countdownRemaining);
+
+    this.countdownTimer = setInterval(() => {
+      this.countdownRemaining--;
+      if (this.countdownRemaining <= 0) {
+        this.clearTimers();
+        this.startHand();
+      } else {
+        this.callbacks.broadcastCountdown(this.room.code, this.countdownRemaining);
+      }
+    }, 1000);
+  }
+
+  /** Check if countdown is paused */
+  isPaused(): boolean {
+    return this.countdownPaused;
   }
 
   /** Clear all timers */
