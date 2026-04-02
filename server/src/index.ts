@@ -239,6 +239,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ---- Add-On (top up chips between hands) ----
+  socket.on('add-on', ({ amount }) => {
+    const player = roomManager.getPlayer(socket.id);
+    const room = roomManager.getRoomForSocket(socket.id);
+    if (!player || !room) return;
+
+    if (!player.seated) {
+      socket.emit('error', { message: 'Must be seated to add on' });
+      return;
+    }
+
+    // Validate amount
+    const maxBuyIn = 300 * room.settings.bigBlind;
+    if (amount < player.chips || amount > maxBuyIn) {
+      socket.emit('error', { message: `Add-on must be between current stack and $${maxBuyIn.toFixed(2)}` });
+      return;
+    }
+
+    player.chips = amount;
+    player.sittingOut = false; // Re-enter if sitting out
+    io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
+    console.log(`[room] ${player.name} added on to $${amount.toFixed(2)} in room ${room.code}`);
+  });
+
   // ---- Disconnect ----
   socket.on('disconnect', () => {
     const result = roomManager.handleDisconnect(socket.id);
@@ -260,11 +284,11 @@ io.on('connection', (socket) => {
 
 function createCallbacks(roomCode: string) {
   return {
-    sendHandState(socketId: string, handState: any, actions: any, isYourTurn: boolean) {
-      io.to(socketId).emit('hand-state', { handState, availableActions: actions, isYourTurn });
+    sendHandState(socketId: string, handState: any, actions: any, isYourTurn: boolean, lastAction?: any, handDescription?: string) {
+      io.to(socketId).emit('hand-state', { handState, availableActions: actions, isYourTurn, lastAction, handDescription });
     },
-    sendHandComplete(socketId: string, winners: any, finalState: any) {
-      io.to(socketId).emit('hand-complete', { winners, finalState });
+    sendHandComplete(socketId: string, winners: any, finalState: any, handDescriptions: Record<string, string>) {
+      io.to(socketId).emit('hand-complete', { winners, finalState, handDescriptions });
     },
     sendDcChoose(socketId: string) {
       io.to(socketId).emit('dc-choose');

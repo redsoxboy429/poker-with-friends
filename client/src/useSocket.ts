@@ -42,6 +42,10 @@ export interface SocketState {
   countdown: number | null;
   dcChoosing: boolean;
   error: string | null;
+  // Enriched server data
+  lastAction: { playerId: string; type: string; amount?: number; discardCount?: number } | null;
+  handDescription: string | null;
+  handDescriptions: Record<string, string> | null;
 }
 
 export interface SocketActions {
@@ -82,6 +86,9 @@ const INITIAL_STATE: SocketState = {
   countdown: null,
   dcChoosing: false,
   error: null,
+  lastAction: null,
+  handDescription: null,
+  handDescriptions: null,
 };
 
 type SocketAction =
@@ -89,8 +96,8 @@ type SocketAction =
   | { type: 'ROOM_CREATED'; roomState: RoomStateView }
   | { type: 'ROOM_JOINED'; roomState: RoomStateView; yourPlayerId: string }
   | { type: 'ROOM_STATE'; roomState: RoomStateView; isHost: boolean }
-  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean }
-  | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView }
+  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string }
+  | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView; handDescriptions: Record<string, string> }
   | { type: 'DC_CHOOSE' }
   | { type: 'DC_PICKED' }
   | { type: 'COUNTDOWN'; seconds: number }
@@ -122,7 +129,9 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         handState: action.handState,
         availableActions: action.availableActions,
         isYourTurn: action.isYourTurn,
-        ...(clearWinners ? { winners: null, finalState: null } : {}),
+        lastAction: action.lastAction ?? null,
+        handDescription: action.handDescription ?? null,
+        ...(clearWinners ? { winners: null, finalState: null, handDescriptions: null } : {}),
       };
     }
 
@@ -131,6 +140,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         ...state,
         winners: action.winners,
         finalState: action.finalState,
+        handDescriptions: action.handDescriptions,
         isYourTurn: false,
         availableActions: null,
       };
@@ -231,11 +241,18 @@ function useSocketInternal(): SocketContextValue {
         handState: data.handState,
         availableActions: data.availableActions,
         isYourTurn: data.isYourTurn,
+        lastAction: data.lastAction,
+        handDescription: data.handDescription,
       });
     });
 
     socket.on('hand-complete', (data) => {
-      dispatch({ type: 'HAND_COMPLETE', winners: data.winners, finalState: data.finalState });
+      dispatch({
+        type: 'HAND_COMPLETE',
+        winners: data.winners,
+        finalState: data.finalState,
+        handDescriptions: data.handDescriptions ?? {},
+      });
     });
 
     socket.on('dc-choose', () => {

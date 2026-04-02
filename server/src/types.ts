@@ -96,10 +96,13 @@ export interface ServerToClientEvents {
     handState: PlayerView;
     availableActions: AvailableActions | null;
     isYourTurn: boolean;
+    lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number };
+    handDescription?: string;
   }) => void;
   'hand-complete': (data: {
     winners: WinnerInfo[];
     finalState: PlayerView;
+    handDescriptions: Record<string, string>;
   }) => void;
   'player-joined': (data: { playerName: string; seatIndex: number }) => void;
   'player-left': (data: { playerName: string; seatIndex: number }) => void;

@@ -32,9 +32,9 @@ const AUTO_DEAL_DELAY_MS = 12_000;
 /** Callback interface for the controller to communicate with the socket layer */
 export interface GameCallbacks {
   /** Send filtered hand state to a specific player */
-  sendHandState(socketId: string, handState: PlayerView, actions: AvailableActions | null, isYourTurn: boolean): void;
+  sendHandState(socketId: string, handState: PlayerView, actions: AvailableActions | null, isYourTurn: boolean, lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }, handDescription?: string): void;
   /** Send hand complete to a specific player */
-  sendHandComplete(socketId: string, winners: WinnerInfo[], finalState: PlayerView): void;
+  sendHandComplete(socketId: string, winners: WinnerInfo[], finalState: PlayerView, handDescriptions: Record<string, string>): void;
   /** Ask a player to pick a Dealer's Choice variant */
   sendDcChoose(socketId: string): void;
   /** Broadcast countdown to all players in the room */
@@ -55,6 +55,7 @@ export class GameController {
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private autoDealTimer: ReturnType<typeof setTimeout> | null = null;
   private firstHand: boolean = true;
+  private lastActionIndex: number = 0; // Tracks action history for broadcasting
 
   constructor(room: Room, callbacks: GameCallbacks) {
     this.room = room;
@@ -180,6 +181,7 @@ export class GameController {
       this.game = createGame(variant, enginePlayers, this.buttonIndex, config);
       this.game.start();
       this.room.state = 'playing';
+      this.lastActionIndex = 0; // Reset for new hand
 
       // Broadcast initial state
       this.broadcastState();
@@ -315,11 +317,26 @@ export class GameController {
       }
     }
 
+    // Build hand descriptions for showdown display
+    const handDescriptions: Record<string, string> = {};
+    for (const enginePlayer of state.players) {
+      if (!enginePlayer.folded) {
+        try {
+          const desc = this.game!.getHandDescription(enginePlayer.id);
+          if (desc?.description) {
+            handDescriptions[enginePlayer.id] = desc.description;
+          }
+        } catch {
+          // Some games may not support hand descriptions
+        }
+      }
+    }
+
     // Send hand-complete to each player with their view
     for (const [socketId, roomPlayer] of this.room.players) {
       if (!roomPlayer.connected) continue;
       const view = getPlayerView(state, roomPlayer.playerId);
-      this.callbacks.sendHandComplete(socketId, winners, view);
+      this.callbacks.sendHandComplete(socketId, winners, view, handDescriptions);
     }
 
     // Start auto-deal countdown
@@ -333,6 +350,19 @@ export class GameController {
     const state = this.game.getState();
     const activePlayer = state.players[state.activePlayerIndex];
 
+    // Extract the latest action from action history (for action badges)
+    let lastAction: { playerId: string; type: string; amount?: number; discardCount?: number } | undefined;
+    if (state.actionHistory.length > this.lastActionIndex) {
+      const latest = state.actionHistory[state.actionHistory.length - 1];
+      lastAction = {
+        playerId: latest.playerId,
+        type: latest.type,
+        amount: latest.amount,
+        discardCount: latest.discardIndices?.length,
+      };
+      this.lastActionIndex = state.actionHistory.length;
+    }
+
     for (const [socketId, roomPlayer] of this.room.players) {
       if (!roomPlayer.connected) continue;
 
@@ -340,7 +370,16 @@ export class GameController {
       const isYourTurn = activePlayer?.id === roomPlayer.playerId;
       const actions = isYourTurn ? this.game.getAvailableActions() : null;
 
-      this.callbacks.sendHandState(socketId, view, actions, isYourTurn);
+      // Get hand description for this specific player
+      let handDescription: string | undefined;
+      try {
+        const desc = this.game.getHandDescription(roomPlayer.playerId);
+        handDescription = desc?.description;
+      } catch {
+        // Some game states may not support hand descriptions yet
+      }
+
+      this.callbacks.sendHandState(socketId, view, actions, isYourTurn, lastAction, handDescription);
     }
   }
 
