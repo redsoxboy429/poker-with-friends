@@ -316,8 +316,8 @@ export default function MultiplayerTable() {
             </span>
           )}
         </div>
-        <div className="flex gap-1.5">
-          <span className="text-xs text-slate-500 self-center">
+        <div className="flex gap-1.5 items-center">
+          <span className="text-xs text-slate-500">
             {roomState.players.length} players
           </span>
           <button onClick={() => { socketActions.leaveRoom(); navigate('/'); }}
