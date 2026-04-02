@@ -5,7 +5,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: './',
+  base: '/',
   resolve: {
     alias: {
       '@engine': path.resolve(__dirname, '../engine/src'),
