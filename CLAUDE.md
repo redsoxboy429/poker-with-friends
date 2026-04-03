@@ -94,15 +94,20 @@ Adding a new variant: ~20-30 lines (constructor + evaluateHand override + factor
 
 **Deployed to Railway:** `poker-with-friends-production.up.railway.app` (custom Dockerfile, combined server+client). **Session 3 in progress — full feature port from local practice mode to multiplayer table.**
 
-Session 3 completed so far:
+Session 3 completed:
 - All App.tsx features ported to MultiplayerTable.tsx (animations, action badges, hand descriptions, add-on/cashout modals, session ledger, pause/resume countdown)
 - Server enriched: lastAction + handDescription in hand-state, handDescriptions in hand-complete, add-on handler, pause/resume countdown
 - Seat rotation (you're always at bottom of your own screen)
 - Direct room link join (name prompt instead of white screen)
 - useSocket.ts refactored to useReducer (performance)
 - Default limits: .25/.50 blinds, 2/4 limits
+- Sit out / sit in button (header toggle)
+- Kick player (host only, lobby + mid-hand)
+- Change game mode mid-session (host menu: DC, HORSE, 8-Game, 9-Game, Specific)
+- DC / mixed game tracker (hand count, rotation position, cap info in header)
+- Reconnect handling already implemented (60s grace period, auto-rejoin by name)
 
-**Next: Josh doing thorough multi-device testing. Then remaining Session 3 items (reconnect, sit out, change game, kick player).**
+**Next: Josh doing thorough multi-device testing. Then Session 4 security audit. Sound deferred.**
 
 See `ROADMAP.md` for full roadmap and all completed milestones.
 

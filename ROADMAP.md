@@ -40,15 +40,18 @@
 - [x] Fix Vite base path for SPA routing (absolute asset paths)
 - [x] Copy link button in room lobby
 
+- [x] Sit out / sit in button (header toggle, server already implemented)
+- [x] Kick player (host only — server handler + lobby UI)
+- [x] Change game mode mid-session (host Game menu: DC, HORSE, 8-Game, 9-Game, Specific)
+- [x] DC / mixed game tracker display (hand count, rotation, cap in header)
+- [x] Session state broadcast (server includes sessionState in hand-state events)
+- [x] Reconnect handling (already implemented: 60s grace, auto-rejoin by name match)
+
 **Josh testing — awaiting bug reports.**
 
-**Remaining:**
-- [ ] Reconnect handling (browser refresh, wifi drop — recognize returning players)
-- [ ] Sit out / sit back in (handle posting blinds on return)
-- [ ] Kick player (host control)
-- [ ] Change game between hands without full reset
+**Remaining / Deferred:**
 - [ ] Busted blind logic (missed blinds handling)
-- [ ] Sound effects / your-turn notification (especially mobile)
+- [ ] Sound effects / your-turn notification (especially mobile) — deferred
 
 ### Session 4 — Security Audit
 - [ ] **Privacy hacker bot**: automated agent that joins a room and aggressively attempts to view other players' cards via JS console, DOM inspection, network sniffing, WebSocket message interception, etc. Must confirm that no opponent card data leaks to the client at any point during play (only at showdown).

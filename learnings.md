@@ -124,3 +124,17 @@ Append-only log of session learnings. Reviewed during /weekly-review.
 - Decided: Default limits changed to .25/.50 blinds, 2/4 limits (was 1/2).
 - Decided: Railway server fine to leave running — idle cost is negligible.
 - Next: Josh doing thorough multi-device testing to find remaining bugs. Then remaining Session 3 items: reconnect handling, sit out, kick player, change game between hands.
+
+## 2026-04-02 (cont.) — Session 3 Completion: Sit Out, Kick, Game Change, Tracker
+
+**Project:** poker
+**Duration:** continuation of deep session
+
+- Built: Sit out/in toggle button in header. Server handlers already existed (sit-out/sit-in events set sittingOut flag, getActivePlayers filters them out). Just wired up the UI.
+- Built: Kick player — full stack. Server: kickPlayer() in room-manager (validates host, removes player, auto-folds mid-hand), kick-player socket handler in index.ts (notifies kicked player, broadcasts player-left). Client: "Kick" button next to non-host players in lobby list.
+- Built: Change game mode mid-session — host "Game" menu in header opens modal with mode selector (DC/HORSE/8-Game/9-Game/Specific) and variant picker. Server: extended update-settings to work during playing state (was lobby-only). GameController.updateGameMode() recreates the GameSession. Changes take effect on next hand.
+- Built: DC/mixed game tracker display in header. Server broadcasts sessionState in hand-state events. Client shows "Hand 3/8 • Game 2/8 • Cap 80BB" for rotations, "Hand 2/5" for DC. Uses GameSession.getState() which already tracked everything — just wasn't being sent to clients.
+- Discovered: Reconnect handling was already fully implemented in room-manager.ts (60s grace period, auto-rejoin by name matching, socket transfer, host reassignment). Never needed building — just wasn't documented.
+- Learned: **Check existing implementations before planning new features.** Reconnect, sit-out, and session tracking were all server-complete — just needed UI wiring or socket event additions. Saved significant time vs building from scratch.
+- Learned: GameSession architecture is clean — all rotation/DC/cap tracking lives in one class with a single getState() snapshot method. Adding the tracker was just broadcasting that snapshot.
+- Next: Josh doing thorough multi-device testing. Then Session 4 security audit. Sound deferred to post-launch.
