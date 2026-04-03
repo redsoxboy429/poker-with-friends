@@ -799,23 +799,9 @@ export default function MultiplayerTable() {
               </>
             )}
 
-            {/* DC picker */}
-            {socketState.dcChoosing && (
-              <div className="flex flex-col items-center gap-3 bg-slate-900/80 border border-amber-500/40 rounded-lg p-5 max-w-sm pointer-events-auto">
-                <h2 className="text-sm font-bold text-amber-400">Your Pick — Choose the Game</h2>
-                <div className="grid grid-cols-2 gap-1.5 w-full">
-                  {Object.values(GameVariant).map((v) => (
-                    <button key={v} onClick={() => handleDcPick(v)}
-                      className="py-2 px-3 rounded text-xs font-medium bg-slate-800 text-slate-300 hover:bg-amber-600 hover:text-white transition-colors"
-                    >{VARIANT_LABELS[v]}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Waiting for DC pick */}
+            {/* Waiting for DC pick (non-chooser) */}
             {!gameState && !socketState.dcChoosing && (
-              <p className="text-sm text-slate-400">Waiting for host to choose the game...</p>
+              <p className="text-sm text-slate-400">Waiting for dealer to choose the game...</p>
             )}
           </div>
 
@@ -890,6 +876,22 @@ export default function MultiplayerTable() {
         </div>
       </div>
 
+      {/* DC picker — high z-index overlay so it's always above cards */}
+      {socketState.dcChoosing && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+          <div className="bg-slate-900/95 border border-amber-500/40 rounded-lg p-5 max-w-sm shadow-2xl">
+            <h2 className="text-sm font-bold text-amber-400 mb-3 text-center">Your Pick — Choose the Game</h2>
+            <div className="grid grid-cols-2 gap-1.5 w-full max-h-[60vh] overflow-y-auto">
+              {Object.values(GameVariant).map((v) => (
+                <button key={v} onClick={() => handleDcPick(v)}
+                  className="py-2 px-3 rounded text-xs font-medium bg-slate-800 text-slate-300 hover:bg-amber-600 hover:text-white transition-colors"
+                >{VARIANT_LABELS[v]}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hand description (during play — hide during all-in runout since cards aren't all visible yet) */}
       {socketState.handDescription && gameState && !showdown && !isAllInRunout && (
         <div className="flex-shrink-0 flex justify-center px-4 py-0.5">
@@ -918,7 +920,7 @@ export default function MultiplayerTable() {
             phase={gameState.phase}
             minChip={0.25}
           />
-        ) : showdown ? (
+        ) : (showdown || socketState.winners) ? (
           <div className="flex flex-col items-center gap-2">
             {socketState.countdown !== null && socketState.countdown > 0 && (
               <span className="text-sm font-mono text-slate-400">

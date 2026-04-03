@@ -27,8 +27,7 @@ import type { Room } from './room-manager.js';
 import { getPlayerView } from './state-filter.js';
 import type { PlayerView, RoomPlayer } from './types.js';
 
-const AUTO_DEAL_DELAY_MS = 12_000;
-const FOLD_WIN_DELAY_MS = 3_000;
+const AUTO_DEAL_DELAY_MS = 15_000;
 
 /** Callback interface for the controller to communicate with the socket layer */
 export interface GameCallbacks {
@@ -215,7 +214,6 @@ export class GameController {
     try {
       const done = this.game.act(player.playerId, type, amount);
       if (done) {
-        this.broadcastState(); // Send final state so clients see result immediately
         this.handleHandComplete();
       } else {
         this.broadcastState();
@@ -252,7 +250,6 @@ export class GameController {
     try {
       const done = (this.game as any).discard(player.playerId, cardIndices);
       if (done) {
-        this.broadcastState(); // Send final state so clients see result immediately
         this.handleHandComplete();
       } else {
         this.broadcastState();
@@ -302,10 +299,6 @@ export class GameController {
     const state = this.game.getState();
     const winners = this.game.getWinners();
 
-    // Detect fold-win vs real showdown
-    const nonFolded = state.players.filter(p => !p.folded).length;
-    const isFoldWin = nonFolded <= 1;
-
     // Update player chips in room
     for (const enginePlayer of state.players) {
       const roomPlayer = this.getSocketPlayer(enginePlayer.id);
@@ -335,6 +328,9 @@ export class GameController {
       }
     }
 
+    // Broadcast updated room state (so client has current chip values for add-on etc.)
+    this.callbacks.broadcastRoomState(this.room.code);
+
     // Send hand-complete to each player with their view
     for (const [socketId, roomPlayer] of this.room.players) {
       if (!roomPlayer.connected) continue;
@@ -342,8 +338,8 @@ export class GameController {
       this.callbacks.sendHandComplete(socketId, winners, view, handDescriptions);
     }
 
-    // Shorter countdown for fold-wins (no showdown to review)
-    this.startCountdown(isFoldWin ? FOLD_WIN_DELAY_MS : AUTO_DEAL_DELAY_MS);
+    // Start auto-deal countdown
+    this.startCountdown();
   }
 
   /** Broadcast filtered state to all connected players */
