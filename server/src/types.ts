@@ -88,6 +88,7 @@ export interface ClientToServerEvents {
   'kick-player': (data: { seatIndex: number }) => void;
   'sit-out': () => void;
   'sit-in': () => void;
+  'stop-game': () => void;
 }
 
 /** Server → Client events */
@@ -111,6 +112,7 @@ export interface ServerToClientEvents {
       chooserSeatIndex: number | null;
       capBB: number | null;
     };
+    chipsBehind?: Record<string, number>;
   }) => void;
   'hand-complete': (data: {
     winners: WinnerInfo[];
@@ -121,6 +123,7 @@ export interface ServerToClientEvents {
   'player-left': (data: { playerName: string; seatIndex: number }) => void;
   'dc-choose': () => void;
   'countdown': (data: { seconds: number }) => void;
+  'game-stopped': () => void;
   'error': (data: { message: string }) => void;
 }
 

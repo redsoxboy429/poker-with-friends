@@ -391,6 +391,7 @@ export default function MultiplayerTable() {
         setIsRealShowdown(false);
         setWinInfo([]);
         setSelectedDiscardIndices(new Set());
+        prevHandRef.current = null; // Force new-hand animation on next hand-state
       }
     }
   }, [socketState.handState, showdown]);
@@ -845,6 +846,7 @@ export default function MultiplayerTable() {
                   ? socketState.handDescriptions[player.id]
                   : undefined
               }
+              chipsBehind={socketState.chipsBehind?.[player.id]}
             />
           ))}
 
@@ -998,13 +1000,19 @@ export default function MultiplayerTable() {
             <p className="text-sm text-slate-400 mb-4">
               Cash out ${(myRoomPlayer?.chips ?? 0).toFixed(2)} and leave?
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
               <button onClick={() => { socketActions.leaveRoom(); navigate('/'); }}
-                className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">
+                className="w-full px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">
                 Leave Table
               </button>
+              {socketState.isHost && (
+                <button onClick={() => { socketActions.stopGame(); setShowCashOut(false); }}
+                  className="w-full px-4 py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors">
+                  Stop Game (Back to Lobby)
+                </button>
+              )}
               <button onClick={() => setShowCashOut(false)}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">
+                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">
                 Cancel
               </button>
             </div>

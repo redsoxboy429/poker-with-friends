@@ -28,11 +28,12 @@ import { getPlayerView } from './state-filter.js';
 import type { PlayerView, RoomPlayer } from './types.js';
 
 const AUTO_DEAL_DELAY_MS = 12_000;
+const FOLD_WIN_DELAY_MS = 3_000;
 
 /** Callback interface for the controller to communicate with the socket layer */
 export interface GameCallbacks {
   /** Send filtered hand state to a specific player */
-  sendHandState(socketId: string, handState: PlayerView, actions: AvailableActions | null, isYourTurn: boolean, lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }, handDescription?: string, sessionState?: any): void;
+  sendHandState(socketId: string, handState: PlayerView, actions: AvailableActions | null, isYourTurn: boolean, lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }, handDescription?: string, sessionState?: any, chipsBehind?: Record<string, number>): void;
   /** Send hand complete to a specific player */
   sendHandComplete(socketId: string, winners: WinnerInfo[], finalState: PlayerView, handDescriptions: Record<string, string>): void;
   /** Ask a player to pick a Dealer's Choice variant */
@@ -214,8 +215,7 @@ export class GameController {
     try {
       const done = this.game.act(player.playerId, type, amount);
       if (done) {
-        // Don't broadcastState here — client handles runout animation
-        // from the finalState in hand-complete
+        this.broadcastState(); // Send final state so clients see result immediately
         this.handleHandComplete();
       } else {
         this.broadcastState();
@@ -252,6 +252,7 @@ export class GameController {
     try {
       const done = (this.game as any).discard(player.playerId, cardIndices);
       if (done) {
+        this.broadcastState(); // Send final state so clients see result immediately
         this.handleHandComplete();
       } else {
         this.broadcastState();
@@ -301,6 +302,10 @@ export class GameController {
     const state = this.game.getState();
     const winners = this.game.getWinners();
 
+    // Detect fold-win vs real showdown
+    const nonFolded = state.players.filter(p => !p.folded).length;
+    const isFoldWin = nonFolded <= 1;
+
     // Update player chips in room
     for (const enginePlayer of state.players) {
       const roomPlayer = this.getSocketPlayer(enginePlayer.id);
@@ -337,8 +342,8 @@ export class GameController {
       this.callbacks.sendHandComplete(socketId, winners, view, handDescriptions);
     }
 
-    // Start auto-deal countdown
-    this.startCountdown();
+    // Shorter countdown for fold-wins (no showdown to review)
+    this.startCountdown(isFoldWin ? FOLD_WIN_DELAY_MS : AUTO_DEAL_DELAY_MS);
   }
 
   /** Broadcast filtered state to all connected players */
@@ -380,16 +385,18 @@ export class GameController {
       // Include session state for tracker display
       const sessionState = this.session.getState();
 
-      this.callbacks.sendHandState(socketId, view, actions, isYourTurn, lastAction, handDescription, sessionState);
+      // Only send chipsBehind if there are any
+      const chipsBehind = Object.keys(this.chipsBehind).length > 0 ? this.chipsBehind : undefined;
+      this.callbacks.sendHandState(socketId, view, actions, isYourTurn, lastAction, handDescription, sessionState, chipsBehind);
     }
   }
 
   /** Start auto-deal countdown */
-  private startCountdown(): void {
+  private startCountdown(durationMs: number = AUTO_DEAL_DELAY_MS): void {
     this.clearTimers();
     this.countdownPaused = false;
 
-    this.countdownRemaining = Math.floor(AUTO_DEAL_DELAY_MS / 1000);
+    this.countdownRemaining = Math.floor(durationMs / 1000);
     this.callbacks.broadcastCountdown(this.room.code, this.countdownRemaining);
 
     this.countdownTimer = setInterval(() => {
@@ -454,18 +461,23 @@ export class GameController {
     const isStud = ['razz', 'stud', 'stud8'].includes(variant);
     const isLimit = this.getVariantBettingStructure(variant) === BettingStructure.FixedLimit;
 
+    // Stud ante/bringIn: 12.5% of bigBet each (e.g., $0.50 with $4 bigBet)
+    const bigBet = s.bigBet || s.bigBlind * 2;
+    const studAnte = Math.round(bigBet * 0.125 * 100) / 100;
+    const studBringIn = Math.round(bigBet * 0.125 * 100) / 100;
+
     const config: TableConfig = {
       maxPlayers: 6,
       smallBlind: isStud ? 0 : s.smallBlind,
       bigBlind: isStud ? 0 : s.bigBlind,
-      ante: isStud ? Math.round(s.smallBlind * 0.4) : 0,
-      bringIn: isStud ? Math.round(s.smallBlind * 0.6) : 0,
+      ante: isStud ? studAnte : 0,
+      bringIn: isStud ? studBringIn : 0,
       startingChips: s.startingChips,
       variant,
       bettingStructure: this.getVariantBettingStructure(variant),
     };
 
-    if (isLimit) {
+    if (isLimit || isStud) {
       config.smallBet = s.smallBet || s.bigBlind;
       config.bigBet = s.bigBet || s.bigBlind * 2;
     }

@@ -248,6 +248,26 @@ io.on('connection', (socket) => {
     console.log(`[room] ${player.name} was kicked from room ${room.code}`);
   });
 
+  // ---- Stop Game (Host Only — returns everyone to lobby) ----
+  socket.on('stop-game', () => {
+    const room = roomManager.getRoomForSocket(socket.id);
+    if (!room) return;
+    if (room.hostSocketId !== socket.id) {
+      socket.emit('error', { message: 'Only the host can stop the game' });
+      return;
+    }
+    // Destroy game controller (clears timers)
+    if (room.gameController) {
+      room.gameController.destroy();
+      room.gameController = null;
+    }
+    room.state = 'lobby';
+    // Notify all players
+    io.to(room.code).emit('game-stopped');
+    io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
+    console.log(`[room] Host stopped game in room ${room.code}`);
+  });
+
   // ---- Sit Out / Sit In ----
   socket.on('sit-out', () => {
     const player = roomManager.getPlayer(socket.id);
@@ -331,8 +351,8 @@ io.on('connection', (socket) => {
 
 function createCallbacks(roomCode: string) {
   return {
-    sendHandState(socketId: string, handState: any, actions: any, isYourTurn: boolean, lastAction?: any, handDescription?: string, sessionState?: any) {
-      io.to(socketId).emit('hand-state', { handState, availableActions: actions, isYourTurn, lastAction, handDescription, sessionState });
+    sendHandState(socketId: string, handState: any, actions: any, isYourTurn: boolean, lastAction?: any, handDescription?: string, sessionState?: any, chipsBehind?: Record<string, number>) {
+      io.to(socketId).emit('hand-state', { handState, availableActions: actions, isYourTurn, lastAction, handDescription, sessionState, chipsBehind });
     },
     sendHandComplete(socketId: string, winners: any, finalState: any, handDescriptions: Record<string, string>) {
       io.to(socketId).emit('hand-complete', { winners, finalState, handDescriptions });

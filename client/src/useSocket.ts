@@ -47,6 +47,7 @@ export interface SocketState {
   handDescription: string | null;
   handDescriptions: Record<string, string> | null;
   sessionState: { mode: string; handInVariant: number; handsPerVariant: number; rotationIndex: number; rotationLength: number; currentVariant: string | null; chooserSeatIndex: number | null; capBB: number | null } | null;
+  chipsBehind: Record<string, number> | null;
 }
 
 export interface SocketActions {
@@ -61,6 +62,7 @@ export interface SocketActions {
   startHand: () => void;
   pickVariant: (variant: GameVariant) => void;
   updateSettings: (settings: Partial<RoomSettings>) => void;
+  stopGame: () => void;
   addOn: (amount: number) => void;
   pauseCountdown: () => void;
   resumeCountdown: () => void;
@@ -94,6 +96,7 @@ const INITIAL_STATE: SocketState = {
   handDescription: null,
   handDescriptions: null,
   sessionState: null,
+  chipsBehind: null,
 };
 
 type SocketAction =
@@ -101,7 +104,7 @@ type SocketAction =
   | { type: 'ROOM_CREATED'; roomState: RoomStateView }
   | { type: 'ROOM_JOINED'; roomState: RoomStateView; yourPlayerId: string }
   | { type: 'ROOM_STATE'; roomState: RoomStateView; isHost: boolean }
-  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string; sessionState?: any }
+  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string; sessionState?: any; chipsBehind?: Record<string, number> }
   | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView; handDescriptions: Record<string, string> }
   | { type: 'DC_CHOOSE' }
   | { type: 'DC_PICKED' }
@@ -109,6 +112,7 @@ type SocketAction =
   | { type: 'ERROR'; message: string }
   | { type: 'CLEAR_ERROR' }
   | { type: 'LEAVE_ROOM' }
+  | { type: 'GAME_STOPPED' }
   | { type: 'DISCONNECT' };
 
 function socketReducer(state: SocketState, action: SocketAction): SocketState {
@@ -137,6 +141,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         lastAction: action.lastAction ?? null,
         handDescription: action.handDescription ?? null,
         sessionState: action.sessionState ?? state.sessionState,
+        chipsBehind: action.chipsBehind ?? state.chipsBehind,
         ...(clearWinners ? { winners: null, finalState: null, handDescriptions: null } : {}),
       };
     }
@@ -165,6 +170,23 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
 
     case 'CLEAR_ERROR':
       return { ...state, error: null };
+
+    case 'GAME_STOPPED':
+      return {
+        ...state,
+        handState: null,
+        winners: null,
+        finalState: null,
+        countdown: null,
+        availableActions: null,
+        isYourTurn: false,
+        dcChoosing: false,
+        lastAction: null,
+        handDescription: null,
+        handDescriptions: null,
+        sessionState: null,
+        chipsBehind: null,
+      };
 
     case 'LEAVE_ROOM':
       return {
@@ -250,6 +272,7 @@ function useSocketInternal(): SocketContextValue {
         lastAction: data.lastAction,
         handDescription: data.handDescription,
         sessionState: data.sessionState,
+        chipsBehind: data.chipsBehind,
       });
     });
 
@@ -264,6 +287,10 @@ function useSocketInternal(): SocketContextValue {
 
     socket.on('dc-choose', () => {
       dispatch({ type: 'DC_CHOOSE' });
+    });
+
+    socket.on('game-stopped', () => {
+      dispatch({ type: 'GAME_STOPPED' });
     });
 
     socket.on('countdown', (data) => {
@@ -354,6 +381,10 @@ function useSocketInternal(): SocketContextValue {
     socketRef.current?.emit('sit-in');
   }, []);
 
+  const stopGame = useCallback(() => {
+    socketRef.current?.emit('stop-game');
+  }, []);
+
   const actions: SocketActions = {
     connect,
     disconnect,
@@ -372,6 +403,7 @@ function useSocketInternal(): SocketContextValue {
     kickPlayer,
     sitOut,
     sitIn,
+    stopGame,
   };
 
   return [state, actions];
