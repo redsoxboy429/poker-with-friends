@@ -105,7 +105,7 @@ type SocketAction =
   | { type: 'ROOM_JOINED'; roomState: RoomStateView; yourPlayerId: string }
   | { type: 'ROOM_STATE'; roomState: RoomStateView; isHost: boolean }
   | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string; sessionState?: any; chipsBehind?: Record<string, number> }
-  | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView; handDescriptions: Record<string, string> }
+  | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView; handDescriptions: Record<string, string>; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number } }
   | { type: 'DC_CHOOSE' }
   | { type: 'DC_PICKED' }
   | { type: 'COUNTDOWN'; seconds: number }
@@ -152,6 +152,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         winners: action.winners,
         finalState: action.finalState,
         handDescriptions: action.handDescriptions,
+        lastAction: action.lastAction ?? state.lastAction,
         isYourTurn: false,
         availableActions: null,
       };
@@ -282,6 +283,7 @@ function useSocketInternal(): SocketContextValue {
         winners: data.winners,
         finalState: data.finalState,
         handDescriptions: data.handDescriptions ?? {},
+        lastAction: data.lastAction,
       });
     });
 

@@ -128,6 +128,50 @@ describe('RoomManager', () => {
     });
   });
 
+  describe('kickPlayer', () => {
+    it('host can kick a player', () => {
+      const code = rm.createRoom('socket1', 'Josh', DEFAULT_SETTINGS);
+      rm.joinRoom('socket2', 'Alice', code);
+
+      const result = rm.kickPlayer('socket1', 1); // Kick seat 1 (Alice)
+      expect(result).not.toBeNull();
+      expect(result!.player.name).toBe('Alice');
+
+      const room = rm.getRoom(code)!;
+      expect(room.seatMap[1]).toBeNull();
+      expect(room.players.has('socket2')).toBe(false);
+    });
+
+    it('non-host cannot kick', () => {
+      const code = rm.createRoom('socket1', 'Josh', DEFAULT_SETTINGS);
+      rm.joinRoom('socket2', 'Alice', code);
+
+      const result = rm.kickPlayer('socket2', 0); // Alice tries to kick Josh
+      expect(result).toBeNull();
+
+      // Josh still in room
+      const room = rm.getRoom(code)!;
+      expect(room.players.has('socket1')).toBe(true);
+    });
+
+    it('host cannot kick themselves', () => {
+      const code = rm.createRoom('socket1', 'Josh', DEFAULT_SETTINGS);
+
+      const result = rm.kickPlayer('socket1', 0); // Josh tries to kick himself
+      expect(result).toBeNull();
+    });
+
+    it('kick frees the seat for a new player', () => {
+      const code = rm.createRoom('socket1', 'Josh', DEFAULT_SETTINGS);
+      rm.joinRoom('socket2', 'Alice', code);
+      rm.kickPlayer('socket1', 1);
+
+      // New player can join in the freed seat
+      const { seatIndex } = rm.joinRoom('socket3', 'Bob', code);
+      expect(seatIndex).toBe(1); // Gets Alice's old seat
+    });
+  });
+
   describe('updateSettings', () => {
     it('host can update settings in lobby', () => {
       const code = rm.createRoom('socket1', 'Josh', DEFAULT_SETTINGS);

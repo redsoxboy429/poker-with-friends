@@ -354,8 +354,8 @@ function createCallbacks(roomCode: string) {
     sendHandState(socketId: string, handState: any, actions: any, isYourTurn: boolean, lastAction?: any, handDescription?: string, sessionState?: any, chipsBehind?: Record<string, number>) {
       io.to(socketId).emit('hand-state', { handState, availableActions: actions, isYourTurn, lastAction, handDescription, sessionState, chipsBehind });
     },
-    sendHandComplete(socketId: string, winners: any, finalState: any, handDescriptions: Record<string, string>) {
-      io.to(socketId).emit('hand-complete', { winners, finalState, handDescriptions });
+    sendHandComplete(socketId: string, winners: any, finalState: any, handDescriptions: Record<string, string>, lastAction?: any) {
+      io.to(socketId).emit('hand-complete', { winners, finalState, handDescriptions, lastAction });
     },
     sendDcChoose(socketId: string) {
       io.to(socketId).emit('dc-choose');

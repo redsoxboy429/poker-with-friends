@@ -118,6 +118,7 @@ export interface ServerToClientEvents {
     winners: WinnerInfo[];
     finalState: PlayerView;
     handDescriptions: Record<string, string>;
+    lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number };
   }) => void;
   'player-joined': (data: { playerName: string; seatIndex: number }) => void;
   'player-left': (data: { playerName: string; seatIndex: number }) => void;

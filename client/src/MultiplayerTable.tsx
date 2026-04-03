@@ -355,6 +355,27 @@ export default function MultiplayerTable() {
     const nonFolded = finalState.players.filter(p => !p.folded).length;
     const isReal = nonFolded > 1;
 
+    // Snap card counts to finalState immediately — prevents re-animation
+    // when gameState switches from handState to finalState.
+    // Folded players get 0 (cards disappear), others keep their count.
+    const snappedCounts: Record<string, number> = {};
+    for (const p of finalState.players) {
+      snappedCounts[p.id] = p.folded ? 0 : p.holeCards.length;
+    }
+    updateDealtCardCounts(() => snappedCounts);
+
+    // Process the final action badge (fold, call, etc.)
+    if (socketState.lastAction) {
+      const la = socketState.lastAction;
+      if (la.type === 'discard' || la.type === 'stand-pat') {
+        const drawLabel = la.type === 'stand-pat' ? 'Stand Pat' : `Drew ${la.discardCount ?? 0}`;
+        setLastDrawActions(prev => ({ ...prev, [la.playerId]: drawLabel }));
+      } else {
+        const displayType = formatActionType(la.type, finalState.phase);
+        setLastActions(prev => ({ ...prev, [la.playerId]: displayType }));
+      }
+    }
+
     // Check for unrevealed community cards (all-in runout)
     const currentVisible = visibleCommunityCountRef.current;
     const totalCommunity = finalState.communityCards.length;
@@ -384,7 +405,7 @@ export default function MultiplayerTable() {
       const t = setTimeout(finishShowdown, isReal ? SHOWDOWN_DELAY : 200);
       animTimersRef.current.push(t);
     }
-  }, [socketState.winners, socketState.finalState, addLog, animateRunout, updateVisibleCommunity]);
+  }, [socketState.winners, socketState.finalState, socketState.lastAction, addLog, animateRunout, updateVisibleCommunity, updateDealtCardCounts]);
 
   // Clear showdown on new hand
   useEffect(() => {
@@ -478,8 +499,9 @@ export default function MultiplayerTable() {
   // Rendering setup
   // ============================================================
 
-  // Use finalState during showdown OR all-in runout animation (finalState has the full board)
-  const gameState = (showdown || isAllInRunout) && socketState.finalState ? socketState.finalState : socketState.handState;
+  // Use finalState as soon as it arrives (hand complete) — shows folds, final board, etc.
+  // Falls back to handState during normal play (finalState is null until hand-complete)
+  const gameState = socketState.finalState ?? socketState.handState;
   const roomState = socketState.roomState;
   const myId = socketState.yourPlayerId;
 

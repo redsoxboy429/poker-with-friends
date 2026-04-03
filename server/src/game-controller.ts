@@ -34,7 +34,7 @@ export interface GameCallbacks {
   /** Send filtered hand state to a specific player */
   sendHandState(socketId: string, handState: PlayerView, actions: AvailableActions | null, isYourTurn: boolean, lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }, handDescription?: string, sessionState?: any, chipsBehind?: Record<string, number>): void;
   /** Send hand complete to a specific player */
-  sendHandComplete(socketId: string, winners: WinnerInfo[], finalState: PlayerView, handDescriptions: Record<string, string>): void;
+  sendHandComplete(socketId: string, winners: WinnerInfo[], finalState: PlayerView, handDescriptions: Record<string, string>, lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }): void;
   /** Ask a player to pick a Dealer's Choice variant */
   sendDcChoose(socketId: string): void;
   /** Broadcast countdown to all players in the room */
@@ -328,6 +328,19 @@ export class GameController {
       }
     }
 
+    // Extract the final action (fold, call, etc.) for badge display
+    let lastAction: { playerId: string; type: string; amount?: number; discardCount?: number } | undefined;
+    if (state.actionHistory.length > this.lastActionIndex) {
+      const latest = state.actionHistory[state.actionHistory.length - 1];
+      lastAction = {
+        playerId: latest.playerId,
+        type: latest.type,
+        amount: latest.amount,
+        discardCount: latest.discardIndices?.length,
+      };
+      this.lastActionIndex = state.actionHistory.length;
+    }
+
     // Broadcast updated room state (so client has current chip values for add-on etc.)
     this.callbacks.broadcastRoomState(this.room.code);
 
@@ -335,7 +348,7 @@ export class GameController {
     for (const [socketId, roomPlayer] of this.room.players) {
       if (!roomPlayer.connected) continue;
       const view = getPlayerView(state, roomPlayer.playerId);
-      this.callbacks.sendHandComplete(socketId, winners, view, handDescriptions);
+      this.callbacks.sendHandComplete(socketId, winners, view, handDescriptions, lastAction);
     }
 
     // Start auto-deal countdown

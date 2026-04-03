@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getPlayerView } from '../src/state-filter.js';
 import {
-  NLHGame, RazzGame, TwoSevenTDGame, DrawmahaHighGame,
+  NLHGame, RazzGame, TwoSevenTDGame, DrawmahaHighGame, createGame,
   GameVariant, BettingStructure, GamePhase, ActionType,
   type PlayerState, type HandState,
 } from 'poker-engine';
@@ -178,6 +178,62 @@ describe('getPlayerView', () => {
         );
         expect(ownAction).toBeDefined();
         expect(ownAction!.discardIndices).toEqual([0, 1]);
+      }
+    });
+  });
+
+  describe('Drawmaha games', () => {
+    const DM_CONFIG = {
+      maxPlayers: 6, smallBlind: 5, bigBlind: 10, ante: 0, bringIn: 0,
+      startingChips: 1000, variant: GameVariant.DrawmahaHigh, bettingStructure: BettingStructure.PotLimit,
+    };
+
+    it('hides opponent hole cards during draw phase', () => {
+      const game = new DrawmahaHighGame(DM_CONFIG, makePlayers(2), 0);
+      game.start();
+
+      let state = game.getState();
+      // Play through preflop betting
+      while (state.phase === GamePhase.BettingPreflop) {
+        const activeId = state.players[state.activePlayerIndex].id;
+        const actions = game.getAvailableActions();
+        if (actions.canCall) game.act(activeId, ActionType.Call);
+        else if (actions.canCheck) game.act(activeId, ActionType.Check);
+        state = game.getState();
+      }
+
+      // Should have community cards (flop) + draw phase
+      const p0View = getPlayerView(state, 'p0');
+
+      // Own cards visible
+      expect(p0View.players[0].holeCards.every(c => c !== null)).toBe(true);
+      // Opponent cards hidden (null placeholders)
+      expect(p0View.players[1].holeCards.every(c => c === null)).toBe(true);
+      // Community cards visible to all
+      expect(p0View.communityCards.length).toBeGreaterThan(0);
+    });
+
+    it('shows community cards to both players during board development', () => {
+      const game = new DrawmahaHighGame(DM_CONFIG, makePlayers(2), 0);
+      game.start();
+
+      let state = game.getState();
+      // Play through to see community cards
+      while (state.phase === GamePhase.BettingPreflop) {
+        const activeId = state.players[state.activePlayerIndex].id;
+        const actions = game.getAvailableActions();
+        if (actions.canCall) game.act(activeId, ActionType.Call);
+        else if (actions.canCheck) game.act(activeId, ActionType.Check);
+        state = game.getState();
+      }
+
+      const p0View = getPlayerView(state, 'p0');
+      const p1View = getPlayerView(state, 'p1');
+
+      // Both see same community cards
+      expect(p0View.communityCards.length).toBe(p1View.communityCards.length);
+      if (p0View.communityCards.length > 0) {
+        expect(p0View.communityCards).toEqual(p1View.communityCards);
       }
     });
   });
