@@ -300,6 +300,44 @@ export class RoomManager {
     return [...room.players.values()].filter(p => p.connected && !p.sittingOut).length;
   }
 
+  /** Kick a player from the room (host only) */
+  kickPlayer(hostSocketId: string, seatIndex: number): { room: Room; player: RoomPlayer } | null {
+    const room = this.getRoomForSocket(hostSocketId);
+    if (!room) return null;
+    if (room.hostSocketId !== hostSocketId) return null;
+
+    // Find the player at the given seat
+    const targetSocketId = room.seatMap[seatIndex];
+    if (!targetSocketId) return null;
+
+    const player = room.players.get(targetSocketId);
+    if (!player) return null;
+
+    // Can't kick yourself
+    if (targetSocketId === hostSocketId) return null;
+
+    // If mid-hand, auto-fold
+    if (room.gameController && room.state === 'playing') {
+      room.gameController.handleDisconnect(player.playerId);
+    }
+
+    // Clear any disconnect timer
+    clearTimeout(room.disconnectTimers.get(targetSocketId));
+
+    this.removePlayer(targetSocketId, room);
+
+    return { room, player };
+  }
+
+  /** Update room settings — host only. Allowed in lobby or between hands. */
+  updateSettingsPlaying(socketId: string, updates: Partial<RoomSettings>): void {
+    const room = this.getRoomForSocket(socketId);
+    if (!room) throw new Error('Not in a room');
+    if (room.hostSocketId !== socketId) throw new Error('Only the host can update settings');
+
+    Object.assign(room.settings, updates);
+  }
+
   /** Get total active room count */
   getRoomCount(): number {
     return this.rooms.size;

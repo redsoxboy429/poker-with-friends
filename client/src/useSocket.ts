@@ -46,6 +46,7 @@ export interface SocketState {
   lastAction: { playerId: string; type: string; amount?: number; discardCount?: number } | null;
   handDescription: string | null;
   handDescriptions: Record<string, string> | null;
+  sessionState: { mode: string; handInVariant: number; handsPerVariant: number; rotationIndex: number; rotationLength: number; currentVariant: string | null; chooserSeatIndex: number | null; capBB: number | null } | null;
 }
 
 export interface SocketActions {
@@ -63,6 +64,7 @@ export interface SocketActions {
   addOn: (amount: number) => void;
   pauseCountdown: () => void;
   resumeCountdown: () => void;
+  kickPlayer: (seatIndex: number) => void;
   sitOut: () => void;
   sitIn: () => void;
 }
@@ -91,6 +93,7 @@ const INITIAL_STATE: SocketState = {
   lastAction: null,
   handDescription: null,
   handDescriptions: null,
+  sessionState: null,
 };
 
 type SocketAction =
@@ -98,7 +101,7 @@ type SocketAction =
   | { type: 'ROOM_CREATED'; roomState: RoomStateView }
   | { type: 'ROOM_JOINED'; roomState: RoomStateView; yourPlayerId: string }
   | { type: 'ROOM_STATE'; roomState: RoomStateView; isHost: boolean }
-  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string }
+  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string; sessionState?: any }
   | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView; handDescriptions: Record<string, string> }
   | { type: 'DC_CHOOSE' }
   | { type: 'DC_PICKED' }
@@ -133,6 +136,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         isYourTurn: action.isYourTurn,
         lastAction: action.lastAction ?? null,
         handDescription: action.handDescription ?? null,
+        sessionState: action.sessionState ?? state.sessionState,
         ...(clearWinners ? { winners: null, finalState: null, handDescriptions: null } : {}),
       };
     }
@@ -245,6 +249,7 @@ function useSocketInternal(): SocketContextValue {
         isYourTurn: data.isYourTurn,
         lastAction: data.lastAction,
         handDescription: data.handDescription,
+        sessionState: data.sessionState,
       });
     });
 
@@ -337,6 +342,10 @@ function useSocketInternal(): SocketContextValue {
     socketRef.current?.emit('resume-countdown');
   }, []);
 
+  const kickPlayer = useCallback((seatIndex: number) => {
+    socketRef.current?.emit('kick-player', { seatIndex });
+  }, []);
+
   const sitOut = useCallback(() => {
     socketRef.current?.emit('sit-out');
   }, []);
@@ -360,6 +369,7 @@ function useSocketInternal(): SocketContextValue {
     addOn,
     pauseCountdown,
     resumeCountdown,
+    kickPlayer,
     sitOut,
     sitIn,
   };

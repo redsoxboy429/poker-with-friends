@@ -109,6 +109,11 @@ export default function MultiplayerTable() {
   const [showTracker, setShowTracker] = useState(false);
   const ledgerRef = useRef<Record<string, { totalBuyIn: number; totalBuyOut: number; name: string }>>({});
 
+  // --- Game mode menu (host only) ---
+  const [showGameMenu, setShowGameMenu] = useState(false);
+  const [menuGameMode, setMenuGameMode] = useState<GameMode>(GameMode.DealersChoice);
+  const [menuVariant, setMenuVariant] = useState<GameVariant>(GameVariant.NLH);
+
   // --- Direct link join ---
   const [directJoinName, setDirectJoinName] = useState(() => localStorage.getItem('poker-player-name') || '');
   const [directJoinAttempted, setDirectJoinAttempted] = useState(false);
@@ -570,6 +575,12 @@ export default function MultiplayerTable() {
                 {p.seated
                   ? <span className="ml-auto text-[10px] text-emerald-400">${p.chips.toFixed(2)}</span>
                   : <span className="ml-auto text-[10px] text-slate-600">not seated</span>}
+                {socketState.isHost && !p.isHost && (
+                  <button onClick={() => socketActions.kickPlayer(p.seatIndex)}
+                    className="text-red-500 hover:text-red-400 text-[10px] font-semibold ml-1">
+                    Kick
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -645,15 +656,41 @@ export default function MultiplayerTable() {
     <div className="flex flex-col h-screen bg-slate-950 overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 flex-shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <h1 className="text-sm font-bold text-white">Room {roomState.code}</h1>
           {gameState && (
             <span className="text-xs text-emerald-400 font-medium">
               {VARIANT_LABELS[gameState.variant] || gameState.variant}
             </span>
           )}
+          {/* Session tracker (DC / rotation info) */}
+          {socketState.sessionState && socketState.sessionState.mode !== 'specific' && socketState.sessionState.handsPerVariant > 0 && (
+            <span className="text-[10px] text-slate-500 font-mono">
+              {socketState.sessionState.mode === 'dealers-choice'
+                ? `Hand ${socketState.sessionState.handInVariant}/${socketState.sessionState.handsPerVariant}`
+                : `Hand ${socketState.sessionState.handInVariant}/${socketState.sessionState.handsPerVariant} \u2022 Game ${socketState.sessionState.rotationIndex + 1}/${socketState.sessionState.rotationLength}`
+              }
+              {socketState.sessionState.capBB && ` \u2022 Cap ${socketState.sessionState.capBB}BB`}
+            </span>
+          )}
         </div>
-        <div className="flex gap-1.5 items-center">
+        <div className="flex gap-1 items-center">
+          {/* Sit Out / Sit In */}
+          <button onClick={() => myRoomPlayer?.sittingOut ? socketActions.sitIn() : socketActions.sitOut()}
+            className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+              myRoomPlayer?.sittingOut
+                ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-300'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+            }`}>
+            {myRoomPlayer?.sittingOut ? 'Sit In' : 'Sit Out'}
+          </button>
+          {/* Game Menu (host only) */}
+          {socketState.isHost && (
+            <button onClick={() => { setMenuGameMode(roomState.settings.gameMode as GameMode); setMenuVariant((roomState.settings.variant || GameVariant.NLH) as GameVariant); setShowGameMenu(true); }}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-medium transition-colors">
+              Game
+            </button>
+          )}
           <button onClick={() => setShowTracker(v => !v)}
             className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-medium transition-colors">
             Tracker
@@ -967,6 +1004,67 @@ export default function MultiplayerTable() {
                 Leave Table
               </button>
               <button onClick={() => setShowCashOut(false)}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Game Mode Menu (Host Only) */}
+      {showGameMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[340px] max-w-[420px]">
+            <h3 className="text-lg font-bold text-white mb-4">Change Game</h3>
+            <p className="text-xs text-slate-500 mb-3">Takes effect on the next hand.</p>
+
+            {/* Game mode selector */}
+            <div className="grid grid-cols-2 gap-1.5 mb-4">
+              {Object.values(GameMode).map(m => (
+                <button key={m} onClick={() => setMenuGameMode(m)}
+                  className={`py-2 px-3 rounded text-xs font-medium transition-colors ${
+                    menuGameMode === m
+                      ? 'bg-emerald-700 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}>
+                  {GAME_MODE_LABELS[m] || m}
+                </button>
+              ))}
+            </div>
+
+            {/* Variant picker (only for Specific Game) */}
+            {menuGameMode === GameMode.SpecificGame && (
+              <div className="mb-4">
+                <label className="text-xs text-slate-400 block mb-1">Variant</label>
+                <div className="grid grid-cols-2 gap-1 max-h-48 overflow-y-auto">
+                  {Object.values(GameVariant).map(v => (
+                    <button key={v} onClick={() => setMenuVariant(v)}
+                      className={`py-1.5 px-2 rounded text-[11px] font-medium transition-colors ${
+                        menuVariant === v
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      }`}>
+                      {VARIANT_LABELS[v]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button onClick={() => {
+                socketActions.updateSettings({
+                  gameMode: menuGameMode,
+                  ...(menuGameMode === GameMode.SpecificGame ? { variant: menuVariant } : {}),
+                });
+                setShowGameMenu(false);
+                addLog(`Game changed to ${GAME_MODE_LABELS[menuGameMode] || menuGameMode}${menuGameMode === GameMode.SpecificGame ? ` (${VARIANT_LABELS[menuVariant]})` : ''}`);
+              }}
+                className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-colors">
+                Confirm
+              </button>
+              <button onClick={() => setShowGameMenu(false)}
                 className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">
                 Cancel
               </button>

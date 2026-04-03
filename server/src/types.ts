@@ -85,6 +85,7 @@ export interface ClientToServerEvents {
   'add-on': (data: { amount: number }) => void;
   'pause-countdown': () => void;
   'resume-countdown': () => void;
+  'kick-player': (data: { seatIndex: number }) => void;
   'sit-out': () => void;
   'sit-in': () => void;
 }
@@ -100,6 +101,16 @@ export interface ServerToClientEvents {
     isYourTurn: boolean;
     lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number };
     handDescription?: string;
+    sessionState?: {
+      mode: string;
+      handInVariant: number;
+      handsPerVariant: number;
+      rotationIndex: number;
+      rotationLength: number;
+      currentVariant: string | null;
+      chooserSeatIndex: number | null;
+      capBB: number | null;
+    };
   }) => void;
   'hand-complete': (data: {
     winners: WinnerInfo[];

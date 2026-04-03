@@ -32,7 +32,7 @@ const AUTO_DEAL_DELAY_MS = 12_000;
 /** Callback interface for the controller to communicate with the socket layer */
 export interface GameCallbacks {
   /** Send filtered hand state to a specific player */
-  sendHandState(socketId: string, handState: PlayerView, actions: AvailableActions | null, isYourTurn: boolean, lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }, handDescription?: string): void;
+  sendHandState(socketId: string, handState: PlayerView, actions: AvailableActions | null, isYourTurn: boolean, lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }, handDescription?: string, sessionState?: any): void;
   /** Send hand complete to a specific player */
   sendHandComplete(socketId: string, winners: WinnerInfo[], finalState: PlayerView, handDescriptions: Record<string, string>): void;
   /** Ask a player to pick a Dealer's Choice variant */
@@ -377,7 +377,10 @@ export class GameController {
         // Some game states may not support hand descriptions yet
       }
 
-      this.callbacks.sendHandState(socketId, view, actions, isYourTurn, lastAction, handDescription);
+      // Include session state for tracker display
+      const sessionState = this.session.getState();
+
+      this.callbacks.sendHandState(socketId, view, actions, isYourTurn, lastAction, handDescription, sessionState);
     }
   }
 
@@ -505,6 +508,17 @@ export class GameController {
   /** Get current session state */
   getSessionState() {
     return this.session.getState();
+  }
+
+  /** Update game mode between hands (host only). Recreates the session. */
+  updateGameMode(mode: GameMode, variant?: GameVariant): void {
+    const sessionConfig = {
+      mode,
+      variant,
+      numPlayers: this.getActivePlayers().length,
+    };
+    this.session = new GameSession(sessionConfig);
+    this.firstHand = true; // Reset so next hand doesn't skip variant #1
   }
 
   /** Clean up on room destroy */

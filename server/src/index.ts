@@ -207,13 +207,45 @@ io.on('connection', (socket) => {
   // ---- Update Settings (Host Only) ----
   socket.on('update-settings', (updates) => {
     try {
-      roomManager.updateSettings(socket.id, updates);
-      const room = roomManager.getRoomForSocket(socket.id)!;
+      const room = roomManager.getRoomForSocket(socket.id);
+      if (!room) { socket.emit('error', { message: 'Not in a room' }); return; }
+      if (room.hostSocketId !== socket.id) { socket.emit('error', { message: 'Only the host can update settings' }); return; }
+
+      // If game mode changed during play, update the game controller's session
+      if (room.state === 'playing' && room.gameController && (updates.gameMode || updates.variant)) {
+        room.gameController.updateGameMode(
+          updates.gameMode || room.settings.gameMode,
+          updates.variant || room.settings.variant
+        );
+      }
+
+      // Update room settings (works in both lobby and playing)
+      roomManager.updateSettingsPlaying(socket.id, updates);
       io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update settings';
       socket.emit('error', { message });
     }
+  });
+
+  // ---- Kick Player (Host Only) ----
+  socket.on('kick-player', ({ seatIndex }) => {
+    const result = roomManager.kickPlayer(socket.id, seatIndex);
+    if (!result) {
+      socket.emit('error', { message: 'Cannot kick this player' });
+      return;
+    }
+    const { room, player } = result;
+    // Notify the kicked player
+    const kickedSocket = io.sockets.sockets.get(player.socketId);
+    if (kickedSocket) {
+      kickedSocket.emit('error', { message: 'You were kicked by the host' });
+      kickedSocket.leave(room.code);
+    }
+    // Broadcast to room
+    io.to(room.code).emit('player-left', { playerName: player.name, seatIndex: player.seatIndex });
+    io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
+    console.log(`[room] ${player.name} was kicked from room ${room.code}`);
   });
 
   // ---- Sit Out / Sit In ----
@@ -299,8 +331,8 @@ io.on('connection', (socket) => {
 
 function createCallbacks(roomCode: string) {
   return {
-    sendHandState(socketId: string, handState: any, actions: any, isYourTurn: boolean, lastAction?: any, handDescription?: string) {
-      io.to(socketId).emit('hand-state', { handState, availableActions: actions, isYourTurn, lastAction, handDescription });
+    sendHandState(socketId: string, handState: any, actions: any, isYourTurn: boolean, lastAction?: any, handDescription?: string, sessionState?: any) {
+      io.to(socketId).emit('hand-state', { handState, availableActions: actions, isYourTurn, lastAction, handDescription, sessionState });
     },
     sendHandComplete(socketId: string, winners: any, finalState: any, handDescriptions: Record<string, string>) {
       io.to(socketId).emit('hand-complete', { winners, finalState, handDescriptions });
