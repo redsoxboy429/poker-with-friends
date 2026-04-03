@@ -307,8 +307,11 @@ export default function MultiplayerTable() {
         addLog(`Phase: ${label}`);
         // Clear betting action badges on street change
         setLastActions({});
-        // Clear draw actions when entering a new draw phase
-        if (DRAW_PHASES.includes(curr.phase)) setLastDrawActions({});
+        // Clear draw actions and discard selection when entering a new draw phase
+        if (DRAW_PHASES.includes(curr.phase)) {
+          setLastDrawActions({});
+          setSelectedDiscardIndices(new Set());
+        }
       }
 
       // Animate new community cards
@@ -448,7 +451,8 @@ export default function MultiplayerTable() {
     }
     setAddOnAmount(myPlayer.chips);
     setShowAddOn(true);
-  }, [socketState.roomState, socketState.yourPlayerId, addLog]);
+    if (socketState.isHost) socketActions.pauseCountdown();
+  }, [socketState.roomState, socketState.yourPlayerId, socketState.isHost, socketActions, addLog]);
 
   const handleAddOnConfirm = useCallback(() => {
     const roomState = socketState.roomState;
@@ -467,7 +471,8 @@ export default function MultiplayerTable() {
     }
     addLog(`${myPlayer.name}: Added on $${addAmount.toFixed(2)}`);
     setShowAddOn(false);
-  }, [addOnAmount, socketState.roomState, socketState.yourPlayerId, socketActions, addLog]);
+    if (socketState.isHost) socketActions.resumeCountdown();
+  }, [addOnAmount, socketState.roomState, socketState.yourPlayerId, socketState.isHost, socketActions, addLog]);
 
   // ============================================================
   // Rendering setup
@@ -722,6 +727,7 @@ export default function MultiplayerTable() {
               <tr className="text-slate-500 border-b border-slate-700">
                 <th className="text-left py-1 pr-3">Player</th>
                 <th className="text-right py-1 px-2">Buy-ins</th>
+                <th className="text-right py-1 px-2">Buy-outs</th>
                 <th className="text-right py-1 px-2">Stack</th>
                 <th className="text-right py-1 pl-2">Net</th>
               </tr>
@@ -734,6 +740,7 @@ export default function MultiplayerTable() {
                   <tr key={p.name} className="border-b border-slate-800">
                     <td className="py-1.5 pr-3 text-white font-medium">{p.name}</td>
                     <td className="py-1.5 px-2 text-right text-slate-400">${ledger.totalBuyIn.toFixed(2)}</td>
+                    <td className="py-1.5 px-2 text-right text-slate-400">${ledger.totalBuyOut.toFixed(2)}</td>
                     <td className="py-1.5 px-2 text-right text-slate-300">${p.chips.toFixed(2)}</td>
                     <td className={`py-1.5 pl-2 text-right font-semibold ${net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {net >= 0 ? '+' : ''}{net.toFixed(2)}
@@ -794,7 +801,32 @@ export default function MultiplayerTable() {
                 {showdown && winInfo.length > 0 ? (
                   <WinDisplay winInfo={winInfo} variant={gameState.variant} />
                 ) : (
-                  <PotDisplay collectedAmount={collectedPot} totalAmount={potTotal} />
+                  <PotDisplay collectedAmount={collectedPot} totalAmount={potTotal} pots={(() => {
+                    if (!gameState || gameState.pots.length <= 1) return undefined;
+                    const activePlayers = new Set(
+                      gameState.players.filter(p => !p.folded && !p.sittingOut).map(p => p.id)
+                    );
+                    const merged: typeof gameState.pots = [];
+                    for (const pot of gameState.pots) {
+                      const effectiveIds = pot.eligiblePlayerIds
+                        .filter(id => activePlayers.has(id))
+                        .sort()
+                        .join(',');
+                      const match = merged.find(m => {
+                        const mIds = m.eligiblePlayerIds
+                          .filter(id => activePlayers.has(id))
+                          .sort()
+                          .join(',');
+                        return mIds === effectiveIds;
+                      });
+                      if (match) {
+                        match.amount += pot.amount;
+                      } else {
+                        merged.push({ ...pot, eligiblePlayerIds: [...pot.eligiblePlayerIds] });
+                      }
+                    }
+                    return merged.length > 1 ? merged : undefined;
+                  })()} />
                 )}
               </>
             )}
@@ -985,7 +1017,7 @@ export default function MultiplayerTable() {
                 className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-colors">
                 Confirm
               </button>
-              <button onClick={() => setShowAddOn(false)}
+              <button onClick={() => { setShowAddOn(false); if (socketState.isHost) socketActions.resumeCountdown(); }}
                 className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">
                 Cancel
               </button>
@@ -1003,7 +1035,13 @@ export default function MultiplayerTable() {
               Cash out ${(myRoomPlayer?.chips ?? 0).toFixed(2)} and leave?
             </p>
             <div className="flex flex-col gap-2">
-              <button onClick={() => { socketActions.leaveRoom(); navigate('/'); }}
+              <button onClick={() => {
+                // Record cash-out in ledger
+                if (myRoomPlayer && ledgerRef.current[myRoomPlayer.name]) {
+                  ledgerRef.current[myRoomPlayer.name].totalBuyOut += myRoomPlayer.chips;
+                }
+                socketActions.leaveRoom(); navigate('/');
+              }}
                 className="w-full px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">
                 Leave Table
               </button>
