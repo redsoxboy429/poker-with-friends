@@ -142,7 +142,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         handDescription: action.handDescription ?? null,
         sessionState: action.sessionState ?? state.sessionState,
         chipsBehind: action.chipsBehind ?? state.chipsBehind,
-        ...(clearWinners ? { winners: null, finalState: null, handDescriptions: null } : {}),
+        ...(clearWinners ? { winners: null, finalState: null, handDescriptions: null, countdown: null } : {}),
       };
     }
 
@@ -153,6 +153,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         finalState: action.finalState,
         handDescriptions: action.handDescriptions,
         lastAction: action.lastAction ?? state.lastAction,
+        handDescription: null, // Clear stale hand description
         isYourTurn: false,
         availableActions: null,
       };

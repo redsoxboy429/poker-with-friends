@@ -422,8 +422,12 @@ export default function MultiplayerTable() {
   }, [socketState.winners, socketState.finalState, socketState.lastAction, addLog, updateVisibleCommunity, updateDealtCardCounts]);
 
   // Clear showdown on new hand (when new hand-state arrives with non-complete phase)
+  // CRITICAL: only clear when finalState is null — otherwise we're still in the completed hand.
+  // The HAND_STATE reducer clears finalState when a genuinely new hand-state arrives.
+  // Without this guard, the old handState's non-complete phase immediately clears showdown.
   useEffect(() => {
-    if (socketState.handState && socketState.handState.phase !== 'complete' && socketState.handState.phase !== 'showdown') {
+    if (socketState.handState && !socketState.finalState &&
+        socketState.handState.phase !== 'complete' && socketState.handState.phase !== 'showdown') {
       if (showdown) {
         setShowdown(false);
         setIsRealShowdown(false);
@@ -432,7 +436,7 @@ export default function MultiplayerTable() {
         prevHandRef.current = null; // Force new-hand animation
       }
     }
-  }, [socketState.handState, showdown]);
+  }, [socketState.handState, socketState.finalState, showdown]);
 
   // Initialize ledger when players sit down
   useEffect(() => {
