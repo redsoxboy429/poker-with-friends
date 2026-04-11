@@ -1038,9 +1038,9 @@ export default function MultiplayerTable() {
             phase={gameState.phase}
             minChip={0.25}
           />
-        ) : (showdown || socketState.winners) ? (
+        ) : showdown ? (
           <div className="flex flex-col items-center gap-2">
-            {/* Countdown display (FROM App.tsx lines 1658-1663, server-driven) */}
+            {/* Countdown display — only after showdown declared (FROM App.tsx lines 1658-1663) */}
             {socketState.countdown !== null && socketState.countdown > 0 && (
               <span className="text-sm font-mono text-slate-400">
                 Next hand in <span className="text-white font-bold">{socketState.countdown}</span>...
@@ -1070,6 +1070,9 @@ export default function MultiplayerTable() {
               </button>
             </div>
           </div>
+        ) : socketState.winners ? (
+          // During runout animation — winners received but showdown not yet declared
+          null
         ) : gameState ? (
           <div className="text-center text-slate-600 text-xs py-2">
             Waiting for {rotatedPlayers[rotatedActiveIndex]?.name ?? '...'}
