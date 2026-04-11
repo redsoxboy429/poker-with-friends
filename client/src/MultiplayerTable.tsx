@@ -1,20 +1,16 @@
 // ============================================================
-// MultiplayerTable — table view powered by socket events
+// MultiplayerTable — App.tsx rendering + socket integration
 // ============================================================
-// Full-featured multiplayer table matching App.tsx's polish:
-// - Client-side animations (community cards, hole cards, all-in runout)
-// - Action badges (FOLD/CHECK/CALL/BET/RAISE + draw actions)
-// - Hand description display
-// - Add-on / cash-out modals
-// - Session ledger
-// - Real showdown vs fold-win detection
-// - Stud force-down initial deal animation
+// Built FROM App.tsx's proven rendering/animation code.
+// Engine calls replaced with socket events. Multiplayer UI layered on top.
+// All rendering, animation, showdown, fold display, pot merging logic
+// is IDENTICAL to App.tsx — no reimplementation.
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSocket } from './useSocket';
-import type { AvailableActions } from './engine-wrapper';
 import { GameVariant, GamePhase, ActionType, GameMode } from './engine-wrapper';
+import type { AvailableActions } from './engine-wrapper';
 import {
   CardDisplay,
   PlayerSeat,
@@ -34,10 +30,9 @@ import {
   BET_OFFSETS,
   DRAW_PHASES,
   CARD_DEAL_INTERVAL,
-  ALLIN_STREET_PAUSE,
   SHOWDOWN_DELAY,
+  ALLIN_STREET_PAUSE,
   formatActionType,
-  ACTION_STYLES,
 } from './constants';
 
 // ============================================================
@@ -79,9 +74,13 @@ export default function MultiplayerTable() {
   const navigate = useNavigate();
   const { code } = useParams<{ code: string }>();
   const [socketState, socketActions] = useSocket();
-  const [buyInBB, setBuyInBB] = useState(100);
 
-  // --- Core game UI state ---
+  // --- Lobby state ---
+  const [buyInBB, setBuyInBB] = useState(100);
+  const [directJoinName, setDirectJoinName] = useState(() => localStorage.getItem('poker-player-name') || '');
+  const [directJoinAttempted, setDirectJoinAttempted] = useState(false);
+
+  // --- Core game UI state (FROM App.tsx) ---
   const [logVisible, setLogVisible] = useState(false);
   const [log, setLog] = useState<string[]>(['Connected to room ' + (code || '???')]);
   const [selectedDiscardIndices, setSelectedDiscardIndices] = useState<Set<number>>(new Set());
@@ -89,45 +88,40 @@ export default function MultiplayerTable() {
   const [isRealShowdown, setIsRealShowdown] = useState(false);
   const [winInfo, setWinInfo] = useState<WinEntry[]>([]);
 
-  // --- Action badges ---
+  // --- Action badges (FROM App.tsx) ---
   const [lastActions, setLastActions] = useState<Record<string, string>>({});
   const [lastDrawActions, setLastDrawActions] = useState<Record<string, string>>({});
 
-  // --- Animation state ---
+  // --- Animation state (FROM App.tsx) ---
   const [visibleCommunityCount, setVisibleCommunityCount] = useState(0);
   const [dealtCardCounts, setDealtCardCounts] = useState<Record<string, number>>({});
   const [isAnimating, setIsAnimating] = useState(false);
   const [isAllInRunout, setIsAllInRunout] = useState(false);
   const [studForceDown, setStudForceDown] = useState(false);
 
-  // --- Add-on / Cash-out modals ---
+  // --- Modals (multiplayer versions) ---
   const [showAddOn, setShowAddOn] = useState(false);
   const [addOnAmount, setAddOnAmount] = useState(0);
   const [showCashOut, setShowCashOut] = useState(false);
-
-  // --- Ledger / Tracker ---
   const [showTracker, setShowTracker] = useState(false);
-  const ledgerRef = useRef<Record<string, { totalBuyIn: number; totalBuyOut: number; name: string }>>({});
-
-  // --- Game mode menu (host only) ---
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [menuGameMode, setMenuGameMode] = useState<GameMode>(GameMode.DealersChoice);
   const [menuVariant, setMenuVariant] = useState<GameVariant>(GameVariant.NLH);
 
-  // --- Direct link join ---
-  const [directJoinName, setDirectJoinName] = useState(() => localStorage.getItem('poker-player-name') || '');
-  const [directJoinAttempted, setDirectJoinAttempted] = useState(false);
+  // --- Ledger (FROM App.tsx, keyed by player name for multiplayer) ---
+  const ledgerRef = useRef<Record<string, { totalBuyIn: number; totalBuyOut: number; name: string }>>({});
 
-  // --- Refs for animation coordination ---
-  const visibleCommunityCountRef = useRef(0);
-  const dealtCardCountsRef = useRef<Record<string, number>>({});
-  const animTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // --- Animation refs (FROM App.tsx) ---
   const prevPhaseRef = useRef<string | null>(null);
   const prevHandRef = useRef<typeof socketState.handState>(null);
-  const pendingWinnersRef = useRef<typeof socketState.winners>(null);
-  const pendingFinalStateRef = useRef<typeof socketState.finalState>(null);
+  const animTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const visibleCommunityCountRef = useRef(0);
+  const dealtCardCountsRef = useRef<Record<string, number>>({});
 
-  // --- Helpers ---
+  // ============================================================
+  // Helper functions (FROM App.tsx)
+  // ============================================================
+
   const addLog = useCallback((msg: string) => {
     setLog(prev => {
       const next = [...prev, msg];
@@ -145,19 +139,19 @@ export default function MultiplayerTable() {
     setVisibleCommunityCount(count);
   }, []);
 
-  const updateDealtCardCounts = useCallback((updater: (prev: Record<string, number>) => Record<string, number>) => {
+  const updateDealtCardCounts = useCallback((counts: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => {
     setDealtCardCounts(prev => {
-      const next = updater(prev);
+      const next = typeof counts === 'function' ? counts(prev) : counts;
       dealtCardCountsRef.current = next;
       return next;
     });
   }, []);
 
   // ============================================================
-  // Animation functions (ported from App.tsx)
+  // Animation functions (FROM App.tsx — identical logic)
   // ============================================================
 
-  /** Animate community cards appearing one at a time */
+  /** Animate community cards appearing one at a time (FROM App.tsx lines 452-472) */
   const animateCommunityCards = useCallback(
     (fromCount: number, toCount: number, onDone: () => void) => {
       if (toCount <= fromCount) { onDone(); return; }
@@ -176,22 +170,34 @@ export default function MultiplayerTable() {
     }, [updateVisibleCommunity]
   );
 
-  /** Animate hole cards being dealt one at a time */
+  /** Animate hole cards dealt to players (FROM App.tsx lines 477-541)
+   *  Adapted signature: takes players array instead of full HandState (server sends filtered view) */
   const animateHoleCards = useCallback(
-    (prevCounts: Record<string, number>, players: Array<{ id: string; holeCards: any[]; cardVisibility?: string[] }>, onDone: () => void) => {
-      // Build deal steps: which player gets which card index
-      const dealSteps: Array<{ playerId: string; cardIdx: number }> = [];
+    (players: Array<{ id: string; holeCards: any[]; cardVisibility?: string[]; sittingOut?: boolean }>,
+     buttonIndex: number,
+     prevCounts: Record<string, number>,
+     onDone: () => void) => {
+      const n = players.length;
+      const btn = buttonIndex;
+
+      // Build deal steps in order: left of button, around (FROM App.tsx lines 488-498)
       const maxCards = Math.max(...players.map(p => p.holeCards.length), 0);
-      for (let cardIdx = 1; cardIdx <= maxCards; cardIdx++) {
-        for (const p of players) {
-          if (p.holeCards.length >= cardIdx && (prevCounts[p.id] ?? 0) < cardIdx) {
-            dealSteps.push({ playerId: p.id, cardIdx });
+      const dealSteps: Array<{ playerId: string; cardIdx: number }> = [];
+
+      for (let cardRound = 0; cardRound < maxCards; cardRound++) {
+        for (let offset = 1; offset <= n; offset++) {
+          const idx = (btn + offset) % n;
+          const p = players[idx];
+          const prev = prevCounts[p.id] ?? 0;
+          if (!p.sittingOut && p.holeCards.length > cardRound && cardRound >= prev) {
+            dealSteps.push({ playerId: p.id, cardIdx: cardRound + 1 });
           }
         }
       }
+
       if (dealSteps.length === 0) { onDone(); return; }
 
-      // Stud initial deal: force all cards face-down, then reveal door cards
+      // Stud initial deal: force all cards face-down, then reveal door cards (FROM App.tsx lines 506-512)
       const isStudInitialDeal = players.some(
         p => p.cardVisibility && p.cardVisibility.length > 0
       ) && Object.values(prevCounts).every(c => c === 0);
@@ -221,49 +227,8 @@ export default function MultiplayerTable() {
     }, [updateDealtCardCounts]
   );
 
-  /** Run all-in runout animation (street-by-street reveal) */
-  const animateRunout = useCallback(
-    (currentVisible: number, totalCommunity: number, onDone: () => void) => {
-      // Build street array
-      const streets: Array<[number, number]> = [];
-      let from = currentVisible;
-      if (from === 0 && totalCommunity >= 3) {
-        streets.push([0, 3]); from = 3;
-      }
-      while (from < totalCommunity) {
-        streets.push([from, from + 1]); from++;
-      }
-      if (streets.length === 0) { onDone(); return; }
-
-      setIsAnimating(true);
-      setIsAllInRunout(true);
-
-      let totalDelay = ALLIN_STREET_PAUSE;
-      for (let s = 0; s < streets.length; s++) {
-        const [streetFrom, streetTo] = streets[s];
-        const isLast = s === streets.length - 1;
-        const streetDelay = totalDelay;
-        for (let c = streetFrom; c < streetTo; c++) {
-          const cardDelay = streetDelay + (c - streetFrom) * CARD_DEAL_INTERVAL;
-          const t = setTimeout(() => updateVisibleCommunity(c + 1), cardDelay);
-          animTimersRef.current.push(t);
-        }
-        const streetDoneDelay = streetDelay + (streetTo - streetFrom) * CARD_DEAL_INTERVAL;
-        if (isLast) {
-          const t = setTimeout(() => {
-            setIsAnimating(false);
-            setIsAllInRunout(false);
-            onDone();
-          }, streetDoneDelay + SHOWDOWN_DELAY);
-          animTimersRef.current.push(t);
-        }
-        totalDelay = streetDoneDelay + ALLIN_STREET_PAUSE;
-      }
-    }, [updateVisibleCommunity]
-  );
-
   // ============================================================
-  // Socket effects
+  // Socket effects — replaces processState() + dealNewHand()
   // ============================================================
 
   // Connect on mount
@@ -272,6 +237,7 @@ export default function MultiplayerTable() {
   }, []);
 
   // Process incoming hand state — animate cards, track actions
+  // This replaces processState()'s card animation branch (App.tsx lines 683-792)
   useEffect(() => {
     const curr = socketState.handState;
     const prev = prevHandRef.current;
@@ -281,50 +247,63 @@ export default function MultiplayerTable() {
       return;
     }
 
-    // Detect new hand (prev was null or phase reset from showdown to dealing)
+    // Detect new hand (prev was null)
+    // This replaces dealNewHand()'s animation setup (App.tsx lines 943-973)
     if (!prev) {
-      // New hand — reset animation state
       clearAnimTimers();
       setVisibleCommunityCount(0); visibleCommunityCountRef.current = 0;
       setDealtCardCounts({}); dealtCardCountsRef.current = {};
       setIsAnimating(false); setIsAllInRunout(false); setStudForceDown(false);
       setLastActions({}); setLastDrawActions({});
       addLog(`--- ${VARIANT_LABELS[curr.variant] || curr.variant} ---`);
+      prevPhaseRef.current = curr.phase;
 
-      // Animate initial hole card deal
-      const prevCounts: Record<string, number> = {};
-      curr.players.forEach(p => { prevCounts[p.id] = 0; });
-      animateHoleCards(prevCounts, curr.players, () => {
-        // After hole cards dealt, animate any community cards (e.g. drawmaha)
+      // Animate initial hole card deal (FROM App.tsx lines 967-973)
+      const noPrevCards: Record<string, number> = {};
+      curr.players.forEach(p => { noPrevCards[p.id] = 0; });
+      animateHoleCards(curr.players, curr.buttonIndex, noPrevCards, () => {
+        // After hole cards dealt, animate any community cards (e.g. drawmaha flop)
         if (curr.communityCards.length > 0) {
           animateCommunityCards(0, curr.communityCards.length, () => {});
         }
       });
     } else {
-      // Detect phase change
-      if (prev.phase !== curr.phase) {
-        const label = curr.phase === 'complete' ? 'Showdown' : curr.phase;
+      // Existing hand — detect phase changes
+      // This replaces processState()'s street detection (App.tsx lines 549-555)
+      const prevPhase = prevPhaseRef.current;
+      const currentPhase = curr.phase;
+
+      if (prevPhase !== currentPhase) {
+        const label = currentPhase === 'complete' ? 'Showdown' : currentPhase;
         addLog(`Phase: ${label}`);
-        // Clear betting action badges on street change
+
+        // Clear betting action badges on street change (FROM App.tsx line 691)
         setLastActions({});
-        // Clear draw actions and discard selection when entering a new draw phase
-        if (DRAW_PHASES.includes(curr.phase)) {
-          setLastDrawActions({});
+
+        // Reset card preselection and draw labels on new draw phase (FROM App.tsx lines 699-702)
+        if (DRAW_PHASES.includes(currentPhase)) {
           setSelectedDiscardIndices(new Set());
+          setLastDrawActions({});
         }
       }
 
-      // Animate new community cards
-      const prevCommunity = visibleCommunityCountRef.current;
-      if (curr.communityCards.length > prevCommunity) {
-        animateCommunityCards(prevCommunity, curr.communityCards.length, () => {});
+      prevPhaseRef.current = currentPhase;
+
+      // Animate new community cards (FROM App.tsx lines 770-780)
+      const currentVisible = visibleCommunityCountRef.current;
+      if (curr.communityCards.length > currentVisible) {
+        animateCommunityCards(currentVisible, curr.communityCards.length, () => {});
       }
 
-      // Animate new hole cards (stud streets)
+      // Animate new hole cards for stud streets (FROM App.tsx lines 781-789)
       const prevCardCounts = dealtCardCountsRef.current;
       const hasNewCards = curr.players.some(p => p.holeCards.length > (prevCardCounts[p.id] ?? 0));
       if (hasNewCards) {
-        animateHoleCards(prevCardCounts, curr.players, () => {});
+        const studPrevCounts: Record<string, number> = {};
+        for (const p of curr.players) {
+          studPrevCounts[p.id] = prevCardCounts[p.id] ?? 0;
+        }
+        animateHoleCards(curr.players, curr.buttonIndex, studPrevCounts, () => {});
       }
     }
 
@@ -344,10 +323,10 @@ export default function MultiplayerTable() {
     }
 
     prevHandRef.current = curr;
-    prevPhaseRef.current = curr.phase;
   }, [socketState.handState, socketState.lastAction, addLog, clearAnimTimers, animateHoleCards, animateCommunityCards]);
 
-  // Handle hand complete — animate runout if needed, then show winners
+  // Handle hand complete — showdown display
+  // This is App.tsx's processState() showdown branch (lines 562-680), adapted for socket data
   useEffect(() => {
     if (!socketState.winners || !socketState.finalState) return;
 
@@ -355,16 +334,15 @@ export default function MultiplayerTable() {
     const nonFolded = finalState.players.filter(p => !p.folded).length;
     const isReal = nonFolded > 1;
 
-    // Snap card counts to finalState immediately — prevents re-animation
-    // when gameState switches from handState to finalState.
-    // Folded players get 0 (cards disappear), others keep their count.
+    // Snap card counts immediately (FROM App.tsx lines 581-587)
+    // Folded players → 0 (cards disappear), others → full count
     const snappedCounts: Record<string, number> = {};
     for (const p of finalState.players) {
       snappedCounts[p.id] = p.folded ? 0 : p.holeCards.length;
     }
-    updateDealtCardCounts(() => snappedCounts);
+    updateDealtCardCounts(snappedCounts);
 
-    // Process the final action badge (fold, call, etc.)
+    // Process the final action badge
     if (socketState.lastAction) {
       const la = socketState.lastAction;
       if (la.type === 'discard' || la.type === 'stand-pat') {
@@ -376,14 +354,15 @@ export default function MultiplayerTable() {
       }
     }
 
-    // Check for unrevealed community cards (all-in runout)
+    // Check for unrevealed community cards — all-in runout (FROM App.tsx lines 570-573)
     const currentVisible = visibleCommunityCountRef.current;
     const totalCommunity = finalState.communityCards.length;
     const hasRunout = totalCommunity > currentVisible && isReal;
 
+    // finishShowdown callback (FROM App.tsx lines 589-622)
     const finishShowdown = () => {
-      setIsRealShowdown(isReal);
       setShowdown(true);
+      setIsRealShowdown(isReal);
       setWinInfo(socketState.winners!.map(w => ({
         playerId: w.playerId,
         name: w.name,
@@ -392,22 +371,57 @@ export default function MultiplayerTable() {
         side: w.side,
         potLabel: w.potLabel,
       })));
-      // Make sure all community cards are visible
       updateVisibleCommunity(totalCommunity);
       addLog('--- Hand complete ---');
     };
 
     if (hasRunout) {
-      // Animate the runout, then show winners
-      animateRunout(currentVisible, totalCommunity, finishShowdown);
+      // All-in runout animation (FROM App.tsx lines 624-671)
+      const streets: Array<[number, number]> = [];
+      let from = currentVisible;
+      if (from === 0 && totalCommunity >= 3) {
+        streets.push([0, 3]); from = 3;
+      }
+      while (from < totalCommunity) {
+        streets.push([from, from + 1]); from++;
+      }
+      if (streets.length === 0) { finishShowdown(); return; }
+
+      let totalDelay = ALLIN_STREET_PAUSE;
+      setIsAnimating(true);
+      setIsAllInRunout(true);
+
+      for (let s = 0; s < streets.length; s++) {
+        const [streetFrom, streetTo] = streets[s];
+        const isLast = s === streets.length - 1;
+        const streetDelay = totalDelay;
+
+        for (let c = streetFrom; c < streetTo; c++) {
+          const cardDelay = streetDelay + (c - streetFrom) * CARD_DEAL_INTERVAL;
+          const t = setTimeout(() => updateVisibleCommunity(c + 1), cardDelay);
+          animTimersRef.current.push(t);
+        }
+
+        const streetDoneDelay = streetDelay + (streetTo - streetFrom) * CARD_DEAL_INTERVAL;
+        if (isLast) {
+          const t = setTimeout(() => {
+            setIsAnimating(false);
+            setIsAllInRunout(false);
+            finishShowdown();
+          }, streetDoneDelay + SHOWDOWN_DELAY);
+          animTimersRef.current.push(t);
+        }
+        totalDelay = streetDoneDelay + ALLIN_STREET_PAUSE;
+      }
     } else {
-      // No runout — add a brief delay then show winners
-      const t = setTimeout(finishShowdown, isReal ? SHOWDOWN_DELAY : 200);
+      // Normal showdown or fold-win (FROM App.tsx lines 672-679)
+      const delay = isReal ? SHOWDOWN_DELAY : 200;
+      const t = setTimeout(finishShowdown, delay);
       animTimersRef.current.push(t);
     }
-  }, [socketState.winners, socketState.finalState, socketState.lastAction, addLog, animateRunout, updateVisibleCommunity, updateDealtCardCounts]);
+  }, [socketState.winners, socketState.finalState, socketState.lastAction, addLog, updateVisibleCommunity, updateDealtCardCounts]);
 
-  // Clear showdown on new hand
+  // Clear showdown on new hand (when new hand-state arrives with non-complete phase)
   useEffect(() => {
     if (socketState.handState && socketState.handState.phase !== 'complete' && socketState.handState.phase !== 'showdown') {
       if (showdown) {
@@ -415,7 +429,7 @@ export default function MultiplayerTable() {
         setIsRealShowdown(false);
         setWinInfo([]);
         setSelectedDiscardIndices(new Set());
-        prevHandRef.current = null; // Force new-hand animation on next hand-state
+        prevHandRef.current = null; // Force new-hand animation
       }
     }
   }, [socketState.handState, showdown]);
@@ -431,7 +445,7 @@ export default function MultiplayerTable() {
   }, [socketState.roomState]);
 
   // ============================================================
-  // Action handlers
+  // Action handlers — socket versions of App.tsx handlers
   // ============================================================
 
   const handleAction = useCallback((type: ActionType, amount?: number) => {
@@ -457,6 +471,7 @@ export default function MultiplayerTable() {
     socketActions.pickVariant(variant);
   }, [socketActions]);
 
+  // Add-on (FROM App.tsx lines 1034-1067, adapted for socket)
   const handleAddOnOpen = useCallback(() => {
     const roomState = socketState.roomState;
     if (!roomState) return;
@@ -483,10 +498,9 @@ export default function MultiplayerTable() {
     );
     if (!myPlayer) return;
     const addAmount = addOnAmount - myPlayer.chips;
-    if (addAmount <= 0) { setShowAddOn(false); return; }
+    if (addAmount <= 0) { setShowAddOn(false); if (socketState.isHost) socketActions.resumeCountdown(); return; }
 
     socketActions.addOn(addOnAmount);
-    // Update ledger
     if (ledgerRef.current[myPlayer.name]) {
       ledgerRef.current[myPlayer.name].totalBuyIn += addAmount;
     }
@@ -499,30 +513,27 @@ export default function MultiplayerTable() {
   // Rendering setup
   // ============================================================
 
-  // Use finalState as soon as it arrives (hand complete) — shows folds, final board, etc.
-  // Falls back to handState during normal play (finalState is null until hand-complete)
+  // Use finalState as soon as it arrives (shows folds, final board immediately)
   const gameState = socketState.finalState ?? socketState.handState;
   const roomState = socketState.roomState;
   const myId = socketState.yourPlayerId;
 
-  // --- Early returns for non-game states ---
+  // ============================================================
+  // Early returns — multiplayer-only screens
+  // ============================================================
 
   if (!roomState) {
-    // If connected and have a room code from URL, show join prompt
+    // Direct link join prompt
     if (socketState.status === 'connected' && code && !directJoinAttempted) {
       return (
         <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
           <h2 className="text-xl font-bold text-white mb-4">Join Room {code.toUpperCase()}</h2>
           <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 w-full max-w-xs">
             <label className="text-xs font-semibold text-slate-300 block mb-1">Your Name</label>
-            <input
-              type="text"
-              value={directJoinName}
-              onChange={e => setDirectJoinName(e.target.value)}
-              placeholder="Enter your name"
+            <input type="text" value={directJoinName}
+              onChange={e => setDirectJoinName(e.target.value)} placeholder="Enter your name"
               className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-white text-sm mb-3 focus:outline-none focus:border-emerald-500"
-              maxLength={20}
-              autoFocus
+              maxLength={20} autoFocus
               onKeyDown={e => {
                 if (e.key === 'Enter' && directJoinName.trim()) {
                   localStorage.setItem('poker-player-name', directJoinName.trim());
@@ -531,37 +542,29 @@ export default function MultiplayerTable() {
                 }
               }}
             />
-            <button
-              onClick={() => {
-                if (!directJoinName.trim()) return;
-                localStorage.setItem('poker-player-name', directJoinName.trim());
-                socketActions.joinRoom(directJoinName.trim(), code);
-                setDirectJoinAttempted(true);
-              }}
-              disabled={!directJoinName.trim()}
-              className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold text-sm transition-colors"
-            >
+            <button onClick={() => {
+              if (!directJoinName.trim()) return;
+              localStorage.setItem('poker-player-name', directJoinName.trim());
+              socketActions.joinRoom(directJoinName.trim(), code);
+              setDirectJoinAttempted(true);
+            }} disabled={!directJoinName.trim()}
+              className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold text-sm transition-colors">
               Join Room
             </button>
           </div>
-          <button onClick={() => navigate('/')} className="mt-4 text-slate-500 hover:text-slate-300 text-sm">
-            Back to Lobby
-          </button>
+          <button onClick={() => navigate('/')} className="mt-4 text-slate-500 hover:text-slate-300 text-sm">Back to Lobby</button>
         </div>
       );
     }
-
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
         <p className="text-slate-400 mb-4">Connecting to room {code}...</p>
-        <button onClick={() => navigate('/')} className="text-emerald-400 hover:underline text-sm">
-          Back to Lobby
-        </button>
+        <button onClick={() => navigate('/')} className="text-emerald-400 hover:underline text-sm">Back to Lobby</button>
       </div>
     );
   }
 
-  // Room is in lobby state — show waiting room
+  // Lobby — waiting room
   if (roomState.state === 'lobby' && !gameState && !socketState.dcChoosing) {
     const roomLink = `${window.location.origin}/room/${roomState.code}`;
     const seatedCount = roomState.players.filter(p => p.seated && p.connected).length;
@@ -574,20 +577,17 @@ export default function MultiplayerTable() {
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
         <h2 className="text-2xl font-bold text-white mb-2">Room {roomState.code}</h2>
         <p className="text-slate-400 text-sm mb-6">Share the code or link with friends to join</p>
-
         <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 w-full max-w-sm">
           <div className="text-center mb-4">
             <span className="text-4xl font-mono font-bold text-emerald-400 tracking-[0.3em]">{roomState.code}</span>
             <div className="mt-2"><CopyLinkButton link={roomLink} /></div>
           </div>
-
           <div className="text-center text-xs text-slate-400 mb-3">
             <div>Blinds: ${roomState.settings.smallBlind.toFixed(2)} / ${bb.toFixed(2)}</div>
             {roomState.settings.smallBet && roomState.settings.bigBet && (
               <div>Limits: ${roomState.settings.smallBet.toFixed(2)} / ${roomState.settings.bigBet.toFixed(2)}</div>
             )}
           </div>
-
           <h3 className="text-xs font-semibold text-slate-400 mb-2">
             {seatedCount}/{roomState.maxSeats} seated
             {canStart
@@ -605,36 +605,28 @@ export default function MultiplayerTable() {
                   : <span className="ml-auto text-[10px] text-slate-600">not seated</span>}
                 {socketState.isHost && !p.isHost && (
                   <button onClick={() => socketActions.kickPlayer(p.seatIndex)}
-                    className="text-red-500 hover:text-red-400 text-[10px] font-semibold ml-1">
-                    Kick
-                  </button>
+                    className="text-red-500 hover:text-red-400 text-[10px] font-semibold ml-1">Kick</button>
                 )}
               </div>
             ))}
           </div>
-
           {!iAmSeated && (
             <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-600">
               <label className="text-xs font-semibold text-slate-300 block mb-1">
                 Buy-in: {buyInBB} BB {bb > 0 && <span className="text-slate-500">(${(buyInBB * bb).toFixed(2)})</span>}
               </label>
               <input type="range" min="50" max="300" step="10" value={buyInBB}
-                onChange={(e) => setBuyInBB(Number(e.target.value))} className="w-full accent-emerald-500" />
-              <div className="flex justify-between text-[10px] text-slate-500 mt-0.5 mb-2">
-                <span>50 BB</span><span>300 BB</span>
-              </div>
+                onChange={e => setBuyInBB(Number(e.target.value))} className="w-full accent-emerald-500" />
+              <div className="flex justify-between text-[10px] text-slate-500 mt-0.5 mb-2"><span>50 BB</span><span>300 BB</span></div>
               <button onClick={() => socketActions.sitDown(buyInBB)}
                 className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm transition-colors">
                 Sit Down (${(buyInBB * bb).toFixed(2)})
               </button>
             </div>
           )}
-
           {socketState.isHost && canStart && iAmSeated && (
             <button onClick={() => socketActions.startHand()}
-              className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm transition-colors">
-              Start Game
-            </button>
+              className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm transition-colors">Start Game</button>
           )}
           {!socketState.isHost && canStart && iAmSeated && (
             <p className="text-center text-xs text-slate-500">Waiting for host to start...</p>
@@ -643,17 +635,14 @@ export default function MultiplayerTable() {
             <p className="text-center text-xs text-slate-500">Waiting for more players to sit down...</p>
           )}
         </div>
-
         <button onClick={() => { socketActions.leaveRoom(); navigate('/'); }}
-          className="mt-4 text-slate-500 hover:text-slate-300 text-sm">
-          Leave Room
-        </button>
+          className="mt-4 text-slate-500 hover:text-slate-300 text-sm">Leave Room</button>
       </div>
     );
   }
 
   // ============================================================
-  // Game is active — render the table
+  // Game is active — render the table (FROM App.tsx rendering)
   // ============================================================
 
   const numPlayers = gameState?.players.length ?? roomState.players.length;
@@ -662,27 +651,28 @@ export default function MultiplayerTable() {
   const bb = roomState.settings.bigBlind;
   const maxBuyIn = MAX_BUYIN_BB * bb;
 
+  // Pot calculations (FROM App.tsx lines 1178-1188)
   const collectedPot = gameState ? gameState.pots.reduce((s, p) => s + p.amount, 0) : 0;
   const currentStreetBets = gameState ? gameState.players.reduce((s, p) => s + p.bet, 0) : 0;
   const potTotal = collectedPot + currentStreetBets;
 
   const isDrawPhase = gameState && DRAW_PHASES.includes(gameState.phase);
 
-  // Seat rotation
+  // Seat rotation — you always at bottom (multiplayer-only)
   const mySeatIndex = gameState?.players.findIndex(p => p.id === myId) ?? 0;
   const n = gameState?.players.length ?? 0;
   const rotatedPlayers = gameState ? rotateArray(gameState.players, mySeatIndex) : [];
   const rotatedActiveIndex = n > 0 ? (gameState!.activePlayerIndex - mySeatIndex + n + n) % n : -1;
   const rotatedButtonIndex = n > 0 ? (gameState!.buttonIndex - mySeatIndex + n + n) % n : -1;
 
-  // My current player info (for add-on etc.)
+  // My room player info
   const myRoomPlayer = roomState.players.find(p =>
     p.seatIndex === (socketState.yourPlayerId ? parseInt(socketState.yourPlayerId.slice(1)) : -1)
   );
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 overflow-hidden">
-      {/* Header */}
+      {/* ======== Header (multiplayer version) ======== */}
       <header className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-bold text-white">Room {roomState.code}</h1>
@@ -706,38 +696,26 @@ export default function MultiplayerTable() {
           {/* Sit Out / Sit In */}
           <button onClick={() => myRoomPlayer?.sittingOut ? socketActions.sitIn() : socketActions.sitOut()}
             className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-              myRoomPlayer?.sittingOut
-                ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-300'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
-            }`}>
-            {myRoomPlayer?.sittingOut ? 'Sit In' : 'Sit Out'}
-          </button>
+              myRoomPlayer?.sittingOut ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+            }`}>{myRoomPlayer?.sittingOut ? 'Sit In' : 'Sit Out'}</button>
           {/* Game Menu (host only) */}
           {socketState.isHost && (
             <button onClick={() => { setMenuGameMode(roomState.settings.gameMode as GameMode); setMenuVariant((roomState.settings.variant || GameVariant.NLH) as GameVariant); setShowGameMenu(true); }}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-medium transition-colors">
-              Game
-            </button>
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-medium transition-colors">Game</button>
           )}
           <button onClick={() => setShowTracker(v => !v)}
-            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-medium transition-colors">
-            Tracker
-          </button>
+            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-medium transition-colors">Tracker</button>
           <button onClick={() => setShowCashOut(true)}
-            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold transition-colors">
-            Leave
-          </button>
+            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold transition-colors">Leave</button>
         </div>
       </header>
 
       {/* Error banner */}
       {socketState.error && (
-        <div className="px-4 py-1.5 bg-red-900/40 text-red-300 text-xs text-center">
-          {socketState.error}
-        </div>
+        <div className="px-4 py-1.5 bg-red-900/40 text-red-300 text-xs text-center">{socketState.error}</div>
       )}
 
-      {/* Tracker popup */}
+      {/* ======== Tracker Popup (FROM App.tsx lines 1267-1302, with multiplayer data) ======== */}
       {showTracker && (
         <div className="absolute top-12 right-4 z-50 bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-4 min-w-[320px]">
           <div className="flex items-center justify-between mb-3">
@@ -775,43 +753,131 @@ export default function MultiplayerTable() {
         </div>
       )}
 
-      {/* Table area */}
+      {/* ======== Add-On Modal (FROM App.tsx lines 1306-1346) ======== */}
+      {showAddOn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[320px] max-w-[400px]">
+            <h3 className="text-lg font-bold text-white mb-4">Add On</h3>
+            <p className="text-sm text-slate-400 mb-3">Set chips to:</p>
+            <div className="flex items-center gap-3 mb-4">
+              <input type="range" min={myRoomPlayer?.chips ?? 0} max={maxBuyIn}
+                step={roomState.settings.smallBlind} value={addOnAmount}
+                onChange={e => setAddOnAmount(parseFloat(e.target.value))} className="flex-1 accent-emerald-500" />
+              <span className="text-lg font-bold text-emerald-300 w-20 text-right">${addOnAmount.toFixed(2)}</span>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Adding ${Math.max(0, addOnAmount - (myRoomPlayer?.chips ?? 0)).toFixed(2)}</p>
+            <div className="flex gap-2">
+              <button onClick={handleAddOnConfirm}
+                className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-colors">Confirm</button>
+              <button onClick={() => { setShowAddOn(false); if (socketState.isHost) socketActions.resumeCountdown(); }}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======== Cash-Out / Leave Modal ======== */}
+      {showCashOut && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[300px]">
+            <h3 className="text-lg font-bold text-white mb-3">Leave Table</h3>
+            <p className="text-sm text-slate-400 mb-4">Cash out ${(myRoomPlayer?.chips ?? 0).toFixed(2)} and leave?</p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => {
+                if (myRoomPlayer && ledgerRef.current[myRoomPlayer.name]) {
+                  ledgerRef.current[myRoomPlayer.name].totalBuyOut += myRoomPlayer.chips;
+                }
+                socketActions.leaveRoom(); navigate('/');
+              }} className="w-full px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">Leave Table</button>
+              {socketState.isHost && (
+                <button onClick={() => { socketActions.stopGame(); setShowCashOut(false); }}
+                  className="w-full px-4 py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors">Stop Game (Back to Lobby)</button>
+              )}
+              <button onClick={() => setShowCashOut(false)}
+                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======== Game Mode Menu (Host Only) ======== */}
+      {showGameMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[340px] max-w-[420px]">
+            <h3 className="text-lg font-bold text-white mb-4">Change Game</h3>
+            <p className="text-xs text-slate-500 mb-3">Takes effect on the next hand.</p>
+            <div className="grid grid-cols-2 gap-1.5 mb-4">
+              {Object.values(GameMode).map(m => (
+                <button key={m} onClick={() => setMenuGameMode(m)}
+                  className={`py-2 px-3 rounded text-xs font-medium transition-colors ${
+                    menuGameMode === m ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}>{GAME_MODE_LABELS[m] || m}</button>
+              ))}
+            </div>
+            {menuGameMode === GameMode.SpecificGame && (
+              <div className="mb-4">
+                <label className="text-xs text-slate-400 block mb-1">Variant</label>
+                <div className="grid grid-cols-2 gap-1 max-h-48 overflow-y-auto">
+                  {Object.values(GameVariant).map(v => (
+                    <button key={v} onClick={() => setMenuVariant(v)}
+                      className={`py-1.5 px-2 rounded text-[11px] font-medium transition-colors ${
+                        menuVariant === v ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      }`}>{VARIANT_LABELS[v]}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => {
+                socketActions.updateSettings({
+                  gameMode: menuGameMode,
+                  ...(menuGameMode === GameMode.SpecificGame ? { variant: menuVariant } : {}),
+                });
+                setShowGameMenu(false);
+                addLog(`Game changed to ${GAME_MODE_LABELS[menuGameMode] || menuGameMode}${menuGameMode === GameMode.SpecificGame ? ` (${VARIANT_LABELS[menuVariant]})` : ''}`);
+              }} className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-colors">Confirm</button>
+              <button onClick={() => setShowGameMenu(false)}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======== Table Area (FROM App.tsx lines 1374-1617) ======== */}
       <div className="flex-1 flex items-center justify-center p-4 relative">
         <div className="relative w-full max-w-4xl" style={{ aspectRatio: '16 / 9' }}>
-          {/* Table surface */}
-          <div
-            className="absolute inset-0 rounded-[50%] shadow-2xl"
-            style={{
-              background: 'radial-gradient(ellipse at 40% 40%, #1a5c2a 0%, #145222 40%, #0d3d18 100%)',
-              border: '8px solid #2a1a0a',
-              boxShadow: 'inset 0 0 60px rgba(0,0,0,0.4), 0 8px 32px rgba(0,0,0,0.5), 0 0 0 12px #1a0f05',
-            }}
-          >
+          {/* Table surface — oval (FROM App.tsx lines 1382-1408) */}
+          <div className="absolute inset-0 rounded-[50%] shadow-2xl" style={{
+            background: 'radial-gradient(ellipse at 40% 40%, #1a5c2a 0%, #145222 40%, #0d3d18 100%)',
+            border: '8px solid #2a1a0a',
+            boxShadow: 'inset 0 0 60px rgba(0,0,0,0.4), 0 8px 32px rgba(0,0,0,0.5), 0 0 0 12px #1a0f05',
+          }}>
             <div className="absolute inset-0 rounded-[50%]" style={{ boxShadow: 'inset 0 0 20px rgba(0,0,0,0.3)' }} />
             <div className="absolute inset-0 rounded-[50%] opacity-[0.03]"
-              style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.5) 2px, rgba(255,255,255,0.5) 3px)' }}
-            />
+              style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.5) 2px, rgba(255,255,255,0.5) 3px)' }} />
           </div>
 
-          {/* Center content */}
+          {/* Center content (FROM App.tsx lines 1411-1524) */}
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
             {gameState && (
               <>
+                {/* Variant label on felt */}
                 <div className="text-xs font-semibold text-amber-300/80 tracking-wide mb-1">
                   {VARIANT_LABELS[gameState.variant] || gameState.variant}
                 </div>
+
+                {/* Phase indicator */}
                 <div className="text-[10px] text-green-300/50 font-mono uppercase tracking-widest mb-2">
                   {gameState.phase === 'complete' ? 'Showdown' : gameState.phase}
                 </div>
 
-                {/* Community cards — animated reveal via visibleCommunityCount */}
+                {/* Community Cards — animated reveal (FROM App.tsx lines 1437-1455) */}
                 {gameState.communityCards.length > 0 && (
                   <div className="flex gap-1 mb-2">
                     {gameState.communityCards.map((card, i) => (
-                      <div key={i} style={{
+                      <div key={i} className="transition-all duration-200" style={{
                         opacity: i < visibleCommunityCount ? 1 : 0,
-                        transform: i < visibleCommunityCount ? 'scale(1)' : 'scale(0.8)',
-                        transition: 'opacity 0.15s ease-out, transform 0.15s ease-out',
+                        transform: i < visibleCommunityCount ? 'translateY(0) scale(1)' : 'translateY(-8px) scale(0.9)',
                       }}>
                         <CardDisplay card={card} />
                       </div>
@@ -819,7 +885,7 @@ export default function MultiplayerTable() {
                   </div>
                 )}
 
-                {/* Pot or Win display */}
+                {/* Pot or Win Display (FROM App.tsx lines 1457-1490) */}
                 {showdown && winInfo.length > 0 ? (
                   <WinDisplay winInfo={winInfo} variant={gameState.variant} />
                 ) : (
@@ -831,21 +897,13 @@ export default function MultiplayerTable() {
                     const merged: typeof gameState.pots = [];
                     for (const pot of gameState.pots) {
                       const effectiveIds = pot.eligiblePlayerIds
-                        .filter(id => activePlayers.has(id))
-                        .sort()
-                        .join(',');
+                        .filter(id => activePlayers.has(id)).sort().join(',');
                       const match = merged.find(m => {
-                        const mIds = m.eligiblePlayerIds
-                          .filter(id => activePlayers.has(id))
-                          .sort()
-                          .join(',');
+                        const mIds = m.eligiblePlayerIds.filter(id => activePlayers.has(id)).sort().join(',');
                         return mIds === effectiveIds;
                       });
-                      if (match) {
-                        match.amount += pot.amount;
-                      } else {
-                        merged.push({ ...pot, eligiblePlayerIds: [...pot.eligiblePlayerIds] });
-                      }
+                      if (match) { match.amount += pot.amount; }
+                      else { merged.push({ ...pot, eligiblePlayerIds: [...pot.eligiblePlayerIds] }); }
                     }
                     return merged.length > 1 ? merged : undefined;
                   })()} />
@@ -859,7 +917,7 @@ export default function MultiplayerTable() {
             )}
           </div>
 
-          {/* Player seats */}
+          {/* Player seats (FROM App.tsx lines 1527-1561, with seat rotation) */}
           {gameState && rotatedPlayers.map((player, i) => (
             <PlayerSeat
               key={player.id}
@@ -876,28 +934,32 @@ export default function MultiplayerTable() {
               isTop={positions[i][1] < 50}
               onCardClick={toggleDiscard}
               selectedDiscardIndices={selectedDiscardIndices}
-              isDrawing={isDrawPhase && player.id === myId}
-              dealtCardCount={showdown ? (player.folded ? 0 : player.holeCards.length) : (dealtCardCounts[player.id] ?? 0)}
+              isDrawing={isDrawPhase === true && player.id === myId}
+              dealtCardCount={
+                showdown
+                  ? (player.folded ? 0 : player.holeCards.length)
+                  : (dealtCardCounts[player.id] ?? 0)
+              }
               lastAction={lastActions[player.id]}
               lastDrawAction={lastDrawActions[player.id]}
               forceAllDown={studForceDown}
+              chipsBehind={socketState.chipsBehind?.[player.id]}
               handDescription={
                 showdown && isRealShowdown && !player.folded && socketState.handDescriptions
                   ? socketState.handDescriptions[player.id]
                   : undefined
               }
-              chipsBehind={socketState.chipsBehind?.[player.id]}
             />
           ))}
 
-          {/* Bet chips */}
+          {/* Bet chips (FROM App.tsx lines 1563-1574, with rotation) */}
           {gameState && !showdown && rotatedPlayers.map((player, i) =>
             player.bet > 0 ? (
               <BetChip key={`bet-${player.id}`} amount={player.bet} position={betPositions[i]} />
             ) : null
           )}
 
-          {/* Win chips */}
+          {/* Win chips (FROM App.tsx lines 1576-1609, with rotation) */}
           {gameState && showdown && winInfo.map((w, idx) => {
             const playerIdx = rotatedPlayers.findIndex(p => p.id === w.playerId);
             if (playerIdx === -1) return null;
@@ -906,10 +968,9 @@ export default function MultiplayerTable() {
             const chipY = 50 + (seatPos[1] - 50) * 0.45;
             const chipGroups = decomposeChips(w.amount);
             return (
-              <div key={`win-${w.playerId}-${idx}`}
-                className="absolute -translate-x-1/2 -translate-y-1/2 z-[5]"
-                style={{ left: `${chipX}%`, top: `${chipY}%` }}
-              >
+              <div key={`win-chips-${w.playerId}-${idx}`}
+                className="absolute -translate-x-1/2 -translate-y-1/2 z-[5] transition-all duration-700 ease-out"
+                style={{ left: `${chipX}%`, top: `${chipY}%` }}>
                 <div className="flex items-end gap-0.5">
                   {chipGroups.map((group, gi) => (
                     <div key={gi} className="flex flex-col-reverse items-center">
@@ -925,18 +986,18 @@ export default function MultiplayerTable() {
             );
           })}
 
-          {/* Game log */}
+          {/* Game log (FROM App.tsx lines 1611-1617) */}
           <GameLog entries={log} visible={logVisible} onToggle={() => setLogVisible(v => !v)} />
         </div>
       </div>
 
-      {/* DC picker — high z-index overlay so it's always above cards */}
+      {/* DC picker — high z-index overlay */}
       {socketState.dcChoosing && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
           <div className="bg-slate-900/95 border border-amber-500/40 rounded-lg p-5 max-w-sm shadow-2xl">
             <h2 className="text-sm font-bold text-amber-400 mb-3 text-center">Your Pick — Choose the Game</h2>
             <div className="grid grid-cols-2 gap-1.5 w-full max-h-[60vh] overflow-y-auto">
-              {Object.values(GameVariant).map((v) => (
+              {Object.values(GameVariant).map(v => (
                 <button key={v} onClick={() => handleDcPick(v)}
                   className="py-2 px-3 rounded text-xs font-medium bg-slate-800 text-slate-300 hover:bg-amber-600 hover:text-white transition-colors"
                 >{VARIANT_LABELS[v]}</button>
@@ -946,7 +1007,7 @@ export default function MultiplayerTable() {
         </div>
       )}
 
-      {/* Hand description (during play — hide during all-in runout since cards aren't all visible yet) */}
+      {/* ======== Hand Ranking (FROM App.tsx lines 1620-1627) ======== */}
       {socketState.handDescription && gameState && !showdown && !isAllInRunout && (
         <div className="flex-shrink-0 flex justify-center px-4 py-0.5">
           <span className="text-[11px] font-semibold text-amber-400/80 tracking-wide">
@@ -955,14 +1016,13 @@ export default function MultiplayerTable() {
         </div>
       )}
 
-      {/* Bottom bar — actions */}
+      {/* ======== Bottom Bar — Actions (FROM App.tsx lines 1630-1704, multiplayer version) ======== */}
       <div className="flex-shrink-0 px-4 pb-3 pt-1">
         {isDrawPhase && socketState.isYourTurn && gameState ? (
           <div className="flex flex-wrap items-center gap-2 justify-center">
             <span className="text-xs text-slate-400">Click cards to select for discard, then:</span>
             <button onClick={handleDiscard}
-              className="px-5 py-2 rounded-lg font-semibold text-sm transition-all active:scale-95 shadow-md bg-amber-600 hover:bg-amber-500 text-white shadow-amber-900/30"
-            >
+              className="px-5 py-2 rounded-lg font-semibold text-sm transition-all active:scale-95 shadow-md bg-amber-600 hover:bg-amber-500 text-white shadow-amber-900/30">
               {selectedDiscardIndices.size === 0 ? 'Stand Pat' : `Draw ${selectedDiscardIndices.size}`}
             </button>
           </div>
@@ -976,6 +1036,7 @@ export default function MultiplayerTable() {
           />
         ) : (showdown || socketState.winners) ? (
           <div className="flex flex-col items-center gap-2">
+            {/* Countdown display (FROM App.tsx lines 1658-1663, server-driven) */}
             {socketState.countdown !== null && socketState.countdown > 0 && (
               <span className="text-sm font-mono text-slate-400">
                 Next hand in <span className="text-white font-bold">{socketState.countdown}</span>...
@@ -1011,137 +1072,6 @@ export default function MultiplayerTable() {
           </div>
         ) : null}
       </div>
-
-      {/* Add-On Modal */}
-      {showAddOn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[320px] max-w-[400px]">
-            <h3 className="text-lg font-bold text-white mb-4">Add On</h3>
-            <p className="text-sm text-slate-400 mb-3">Set chips to:</p>
-            <div className="flex items-center gap-3 mb-4">
-              <input type="range"
-                min={myRoomPlayer?.chips ?? 0}
-                max={maxBuyIn}
-                step={roomState.settings.smallBlind}
-                value={addOnAmount}
-                onChange={e => setAddOnAmount(parseFloat(e.target.value))}
-                className="flex-1 accent-emerald-500"
-              />
-              <span className="text-lg font-bold text-emerald-300 w-20 text-right">
-                ${addOnAmount.toFixed(2)}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mb-4">
-              Adding ${Math.max(0, addOnAmount - (myRoomPlayer?.chips ?? 0)).toFixed(2)}
-            </p>
-            <div className="flex gap-2">
-              <button onClick={handleAddOnConfirm}
-                className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-colors">
-                Confirm
-              </button>
-              <button onClick={() => { setShowAddOn(false); if (socketState.isHost) socketActions.resumeCountdown(); }}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cash-Out / Leave Modal */}
-      {showCashOut && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[300px]">
-            <h3 className="text-lg font-bold text-white mb-3">Leave Table</h3>
-            <p className="text-sm text-slate-400 mb-4">
-              Cash out ${(myRoomPlayer?.chips ?? 0).toFixed(2)} and leave?
-            </p>
-            <div className="flex flex-col gap-2">
-              <button onClick={() => {
-                // Record cash-out in ledger
-                if (myRoomPlayer && ledgerRef.current[myRoomPlayer.name]) {
-                  ledgerRef.current[myRoomPlayer.name].totalBuyOut += myRoomPlayer.chips;
-                }
-                socketActions.leaveRoom(); navigate('/');
-              }}
-                className="w-full px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">
-                Leave Table
-              </button>
-              {socketState.isHost && (
-                <button onClick={() => { socketActions.stopGame(); setShowCashOut(false); }}
-                  className="w-full px-4 py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors">
-                  Stop Game (Back to Lobby)
-                </button>
-              )}
-              <button onClick={() => setShowCashOut(false)}
-                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Game Mode Menu (Host Only) */}
-      {showGameMenu && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[340px] max-w-[420px]">
-            <h3 className="text-lg font-bold text-white mb-4">Change Game</h3>
-            <p className="text-xs text-slate-500 mb-3">Takes effect on the next hand.</p>
-
-            {/* Game mode selector */}
-            <div className="grid grid-cols-2 gap-1.5 mb-4">
-              {Object.values(GameMode).map(m => (
-                <button key={m} onClick={() => setMenuGameMode(m)}
-                  className={`py-2 px-3 rounded text-xs font-medium transition-colors ${
-                    menuGameMode === m
-                      ? 'bg-emerald-700 text-white'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}>
-                  {GAME_MODE_LABELS[m] || m}
-                </button>
-              ))}
-            </div>
-
-            {/* Variant picker (only for Specific Game) */}
-            {menuGameMode === GameMode.SpecificGame && (
-              <div className="mb-4">
-                <label className="text-xs text-slate-400 block mb-1">Variant</label>
-                <div className="grid grid-cols-2 gap-1 max-h-48 overflow-y-auto">
-                  {Object.values(GameVariant).map(v => (
-                    <button key={v} onClick={() => setMenuVariant(v)}
-                      className={`py-1.5 px-2 rounded text-[11px] font-medium transition-colors ${
-                        menuVariant === v
-                          ? 'bg-emerald-700 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                      }`}>
-                      {VARIANT_LABELS[v]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button onClick={() => {
-                socketActions.updateSettings({
-                  gameMode: menuGameMode,
-                  ...(menuGameMode === GameMode.SpecificGame ? { variant: menuVariant } : {}),
-                });
-                setShowGameMenu(false);
-                addLog(`Game changed to ${GAME_MODE_LABELS[menuGameMode] || menuGameMode}${menuGameMode === GameMode.SpecificGame ? ` (${VARIANT_LABELS[menuVariant]})` : ''}`);
-              }}
-                className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-colors">
-                Confirm
-              </button>
-              <button onClick={() => setShowGameMenu(false)}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
