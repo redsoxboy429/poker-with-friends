@@ -151,6 +151,8 @@ io.on('connection', (socket) => {
       roomManager.sitDown(socket.id, buyInBB);
       const room = roomManager.getRoomForSocket(socket.id)!;
       io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
+      // Auto-resume countdown if enough players are now seated
+      room.gameController?.autoResumeIfReady();
       console.log(`[room] ${roomManager.getPlayer(socket.id)?.name} sat down in room ${room.code} with ${buyInBB} BB`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to sit down';
@@ -287,6 +289,8 @@ io.on('connection', (socket) => {
       const room = roomManager.getRoomForSocket(socket.id);
       if (room) {
         io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
+        // Auto-resume countdown if now >= 2 active players
+        room.gameController?.autoResumeIfReady();
       }
     }
   });
@@ -306,7 +310,7 @@ io.on('connection', (socket) => {
     room.gameController.resumeCountdown();
   });
 
-  // ---- Add-On (top up chips between hands) ----
+  // ---- Add-On (top up chips — immediate if between hands, queued during active hand) ----
   socket.on('add-on', ({ amount }) => {
     const player = roomManager.getPlayer(socket.id);
     const room = roomManager.getRoomForSocket(socket.id);
@@ -317,17 +321,32 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Validate amount
+    // Validate amount — must be between current effective chips and max buy-in
     const maxBuyIn = 300 * room.settings.bigBlind;
-    if (amount < player.chips || amount > maxBuyIn) {
-      socket.emit('error', { message: `Add-on must be between current stack and $${maxBuyIn.toFixed(2)}` });
+    const currentEffective = Math.max(player.chips, player.queuedAddOn ?? 0);
+    if (amount < currentEffective || amount > maxBuyIn) {
+      socket.emit('error', { message: `Add-on must be between $${currentEffective.toFixed(2)} and $${maxBuyIn.toFixed(2)}` });
       return;
     }
 
-    player.chips = amount;
-    player.sittingOut = false; // Re-enter if sitting out
-    io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
-    console.log(`[room] ${player.name} added on to $${amount.toFixed(2)} in room ${room.code}`);
+    // Determine if a hand is in progress
+    const handInProgress = room.state === 'playing' && !!room.gameController?.getState();
+
+    if (handInProgress) {
+      // Queue the add-on — takes effect on next hand
+      player.queuedAddOn = amount;
+      io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
+      console.log(`[room] ${player.name} queued add-on of $${amount.toFixed(2)} in room ${room.code}`);
+    } else {
+      // Apply immediately (between hands or in lobby)
+      player.chips = amount;
+      player.queuedAddOn = undefined;
+      player.sittingOut = false; // Re-enter if sitting out
+      io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
+      // Auto-resume countdown if this tipped us to 2+ active players
+      room.gameController?.autoResumeIfReady();
+      console.log(`[room] ${player.name} added on to $${amount.toFixed(2)} in room ${room.code}`);
+    }
   });
 
   // ---- Disconnect ----

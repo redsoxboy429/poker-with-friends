@@ -280,6 +280,11 @@ export default function MultiplayerTable() {
         // Clear betting action badges on street change (FROM App.tsx line 691)
         setLastActions({});
 
+        // Also clear draw badges when a new hand starts (phase goes complete/showdown -> active)
+        if (prevPhase === 'complete' || prevPhase === 'showdown') {
+          setLastDrawActions({});
+        }
+
         // Reset card preselection and draw labels on new draw phase (FROM App.tsx lines 699-702)
         if (DRAW_PHASES.includes(currentPhase)) {
           setSelectedDiscardIndices(new Set());
@@ -296,12 +301,19 @@ export default function MultiplayerTable() {
       }
 
       // Animate new hole cards for stud streets (FROM App.tsx lines 781-789)
-      const prevCardCounts = dealtCardCountsRef.current;
-      const hasNewCards = curr.players.some(p => p.holeCards.length > (prevCardCounts[p.id] ?? 0));
+      // Compare against PREVIOUS hand state (authoritative) rather than
+      // dealtCardCountsRef (which updates async during animation).
+      // Otherwise a fast incoming action can re-trigger the hole card deal.
+      const hasNewCards = curr.players.some(p => {
+        const prevPlayer = prev.players.find(pp => pp.id === p.id);
+        const prevCount = prevPlayer?.holeCards.length ?? 0;
+        return p.holeCards.length > prevCount;
+      });
       if (hasNewCards) {
         const studPrevCounts: Record<string, number> = {};
         for (const p of curr.players) {
-          studPrevCounts[p.id] = prevCardCounts[p.id] ?? 0;
+          const prevPlayer = prev.players.find(pp => pp.id === p.id);
+          studPrevCounts[p.id] = prevPlayer?.holeCards.length ?? 0;
         }
         animateHoleCards(curr.players, curr.buttonIndex, studPrevCounts, () => {});
       }
@@ -476,6 +488,7 @@ export default function MultiplayerTable() {
   }, [socketActions]);
 
   // Add-on (FROM App.tsx lines 1034-1067, adapted for socket)
+  // During active hands the add-on is queued by the server and applied on the next hand.
   const handleAddOnOpen = useCallback(() => {
     const roomState = socketState.roomState;
     if (!roomState) return;
@@ -485,14 +498,17 @@ export default function MultiplayerTable() {
       p.seatIndex === (socketState.yourPlayerId ? parseInt(socketState.yourPlayerId.slice(1)) : -1)
     );
     if (!myPlayer) return;
-    if (myPlayer.chips >= maxBuyIn) {
+    // Use max of current chips and any queued add-on as the floor
+    const effectiveChips = Math.max(myPlayer.chips, myPlayer.queuedAddOn ?? 0);
+    if (effectiveChips >= maxBuyIn) {
       addLog('Already at max buy-in');
       return;
     }
-    setAddOnAmount(myPlayer.chips);
+    setAddOnAmount(effectiveChips);
     setShowAddOn(true);
-    if (socketState.isHost) socketActions.pauseCountdown();
-  }, [socketState.roomState, socketState.yourPlayerId, socketState.isHost, socketActions, addLog]);
+    // Only pause countdown if no hand is in progress (host is at showdown)
+    if (socketState.isHost && !socketState.handState) socketActions.pauseCountdown();
+  }, [socketState.roomState, socketState.yourPlayerId, socketState.isHost, socketState.handState, socketActions, addLog]);
 
   const handleAddOnConfirm = useCallback(() => {
     const roomState = socketState.roomState;
@@ -501,17 +517,25 @@ export default function MultiplayerTable() {
       p.seatIndex === (socketState.yourPlayerId ? parseInt(socketState.yourPlayerId.slice(1)) : -1)
     );
     if (!myPlayer) return;
-    const addAmount = addOnAmount - myPlayer.chips;
-    if (addAmount <= 0) { setShowAddOn(false); if (socketState.isHost) socketActions.resumeCountdown(); return; }
+    const effectiveChips = Math.max(myPlayer.chips, myPlayer.queuedAddOn ?? 0);
+    const addAmount = addOnAmount - effectiveChips;
+    if (addAmount <= 0) { setShowAddOn(false); if (socketState.isHost && !socketState.handState) socketActions.resumeCountdown(); return; }
 
     socketActions.addOn(addOnAmount);
+    // Server will queue during active hand or apply immediately if between hands.
+    // Detect which case based on whether a hand is in progress.
+    const handInProgress = !!socketState.handState && !showdown;
     if (ledgerRef.current[myPlayer.name]) {
       ledgerRef.current[myPlayer.name].totalBuyIn += addAmount;
     }
-    addLog(`${myPlayer.name}: Added on $${addAmount.toFixed(2)}`);
+    if (handInProgress) {
+      addLog(`${myPlayer.name}: Queued add-on of $${addAmount.toFixed(2)} (applies next hand)`);
+    } else {
+      addLog(`${myPlayer.name}: Added on $${addAmount.toFixed(2)}`);
+    }
     setShowAddOn(false);
-    if (socketState.isHost) socketActions.resumeCountdown();
-  }, [addOnAmount, socketState.roomState, socketState.yourPlayerId, socketState.isHost, socketActions, addLog]);
+    if (socketState.isHost && !socketState.handState) socketActions.resumeCountdown();
+  }, [addOnAmount, socketState.roomState, socketState.yourPlayerId, socketState.isHost, socketState.handState, showdown, socketActions, addLog]);
 
   // ============================================================
   // Rendering setup
@@ -702,6 +726,14 @@ export default function MultiplayerTable() {
             className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
               myRoomPlayer?.sittingOut ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
             }`}>{myRoomPlayer?.sittingOut ? 'Sit In' : 'Sit Out'}</button>
+          {/* Add On (always visible, queues during hand) */}
+          {myRoomPlayer?.seated && (
+            <button onClick={handleAddOnOpen}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded text-[10px] font-medium transition-colors"
+              title="Top up your stack">
+              {myRoomPlayer.queuedAddOn ? `Add On ($${myRoomPlayer.queuedAddOn.toFixed(0)} queued)` : 'Add On'}
+            </button>
+          )}
           {/* Game Menu (host only) */}
           {socketState.isHost && (
             <button onClick={() => { setMenuGameMode(roomState.settings.gameMode as GameMode); setMenuVariant((roomState.settings.variant || GameVariant.NLH) as GameVariant); setShowGameMenu(true); }}
@@ -709,8 +741,11 @@ export default function MultiplayerTable() {
           )}
           <button onClick={() => setShowTracker(v => !v)}
             className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-medium transition-colors">Tracker</button>
-          <button onClick={() => setShowCashOut(true)}
-            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold transition-colors">Leave</button>
+          {/* Leave: only visible between hands (showdown or no active hand) */}
+          {(showdown || !gameState) && (
+            <button onClick={() => setShowCashOut(true)}
+              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold transition-colors">Leave</button>
+          )}
         </div>
       </header>
 
@@ -762,18 +797,26 @@ export default function MultiplayerTable() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[320px] max-w-[400px]">
             <h3 className="text-lg font-bold text-white mb-4">Add On</h3>
+            {/* Queued-add-on notice if a hand is currently active */}
+            {socketState.handState && !showdown && (
+              <div className="bg-amber-900/30 border border-amber-600/40 rounded p-2 mb-3 text-xs text-amber-300">
+                A hand is in progress. Your add-on will be applied on the next hand.
+              </div>
+            )}
             <p className="text-sm text-slate-400 mb-3">Set chips to:</p>
             <div className="flex items-center gap-3 mb-4">
-              <input type="range" min={myRoomPlayer?.chips ?? 0} max={maxBuyIn}
+              <input type="range"
+                min={Math.max(myRoomPlayer?.chips ?? 0, myRoomPlayer?.queuedAddOn ?? 0)}
+                max={maxBuyIn}
                 step={roomState.settings.smallBlind} value={addOnAmount}
                 onChange={e => setAddOnAmount(parseFloat(e.target.value))} className="flex-1 accent-emerald-500" />
               <span className="text-lg font-bold text-emerald-300 w-20 text-right">${addOnAmount.toFixed(2)}</span>
             </div>
-            <p className="text-xs text-slate-500 mb-4">Adding ${Math.max(0, addOnAmount - (myRoomPlayer?.chips ?? 0)).toFixed(2)}</p>
+            <p className="text-xs text-slate-500 mb-4">Adding ${Math.max(0, addOnAmount - Math.max(myRoomPlayer?.chips ?? 0, myRoomPlayer?.queuedAddOn ?? 0)).toFixed(2)}</p>
             <div className="flex gap-2">
               <button onClick={handleAddOnConfirm}
                 className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-colors">Confirm</button>
-              <button onClick={() => { setShowAddOn(false); if (socketState.isHost) socketActions.resumeCountdown(); }}
+              <button onClick={() => { setShowAddOn(false); if (socketState.isHost && !socketState.handState) socketActions.resumeCountdown(); }}
                 className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors">Cancel</button>
             </div>
           </div>
@@ -1064,10 +1107,6 @@ export default function MultiplayerTable() {
               ) : (
                 <span className="text-xs text-slate-500">Waiting for host to deal...</span>
               )}
-              <button onClick={handleAddOnOpen}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs font-semibold transition-colors">
-                Add On
-              </button>
             </div>
           </div>
         ) : socketState.winners ? (

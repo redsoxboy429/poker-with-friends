@@ -257,6 +257,7 @@ export class RoomManager {
         isHost: p.socketId === room.hostSocketId,
         sittingOut: p.sittingOut,
         seated: p.seated,
+        queuedAddOn: p.queuedAddOn,
       }));
 
     return {

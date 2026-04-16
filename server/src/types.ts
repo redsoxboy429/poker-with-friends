@@ -38,6 +38,7 @@ export interface RoomPlayer {
   playerId: string;               // Engine player ID (p0, p1, etc.)
   sittingOut: boolean;
   seated: boolean;                // Has bought in and is ready to play
+  queuedAddOn?: number;           // Pending add-on amount (applied on next hand)
 }
 
 export interface RoomStateView {
@@ -51,6 +52,7 @@ export interface RoomStateView {
     isHost: boolean;
     sittingOut: boolean;
     seated: boolean;
+    queuedAddOn?: number;
   }>;
   settings: RoomSettings;
   state: 'lobby' | 'playing';

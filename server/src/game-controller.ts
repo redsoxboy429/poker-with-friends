@@ -149,9 +149,24 @@ export class GameController {
     }
 
     try {
+      // Apply any queued add-ons before building engine players
+      for (const rp of activePlayers) {
+        if (rp.queuedAddOn !== undefined) {
+          rp.chips = rp.queuedAddOn;
+          rp.queuedAddOn = undefined;
+        }
+      }
+
       // Build engine players from room players
       const capBB = this.session.getCapBB();
       const config = this.buildTableConfig(variant, capBB);
+
+      // Defensive: clear any stale chipsBehind entries. If this variant is
+      // uncapped (limit games etc), we must not show stale "X (Y)" cap display.
+      // handleHandComplete should have cleared these, but belt-and-suspenders.
+      if (!capBB) {
+        this.chipsBehind = {};
+      }
 
       const enginePlayers: PlayerState[] = activePlayers.map((rp, i) => {
         let chips = rp.chips;
@@ -162,6 +177,9 @@ export class GameController {
           if (chips > maxChips) {
             this.chipsBehind[rp.playerId] = (this.chipsBehind[rp.playerId] || 0) + (chips - maxChips);
             chips = maxChips;
+          } else {
+            // No cap needed for this player this hand — clear any stale entry
+            delete this.chipsBehind[rp.playerId];
           }
         }
 
@@ -406,9 +424,25 @@ export class GameController {
     this.countdownPaused = false;
 
     this.countdownRemaining = Math.floor(durationMs / 1000);
+
+    // Auto-pause immediately if < 2 active players
+    if (this.getActivePlayers().length < 2) {
+      this.countdownPaused = true;
+      this.callbacks.broadcastCountdown(this.room.code, -1);
+      return;
+    }
+
     this.callbacks.broadcastCountdown(this.room.code, this.countdownRemaining);
 
     this.countdownTimer = setInterval(() => {
+      // Auto-pause if active player count drops below 2
+      if (this.getActivePlayers().length < 2) {
+        clearInterval(this.countdownTimer!);
+        this.countdownTimer = null;
+        this.countdownPaused = true;
+        this.callbacks.broadcastCountdown(this.room.code, -1);
+        return;
+      }
       this.countdownRemaining--;
       if (this.countdownRemaining <= 0) {
         this.clearTimers();
@@ -417,6 +451,13 @@ export class GameController {
         this.callbacks.broadcastCountdown(this.room.code, this.countdownRemaining);
       }
     }, 1000);
+  }
+
+  /** Auto-resume countdown if it was paused due to insufficient players */
+  autoResumeIfReady(): void {
+    if (!this.countdownPaused) return;
+    if (this.getActivePlayers().length < 2) return;
+    this.resumeCountdown();
   }
 
   /** Pause the auto-deal countdown (host only) */
@@ -432,11 +473,21 @@ export class GameController {
   /** Resume the auto-deal countdown (host only) */
   resumeCountdown(): void {
     if (!this.countdownPaused) return;
+    // Don't resume if still below 2 active players
+    if (this.getActivePlayers().length < 2) return;
     this.countdownPaused = false;
 
     this.callbacks.broadcastCountdown(this.room.code, this.countdownRemaining);
 
     this.countdownTimer = setInterval(() => {
+      // Auto-pause if active player count drops below 2
+      if (this.getActivePlayers().length < 2) {
+        clearInterval(this.countdownTimer!);
+        this.countdownTimer = null;
+        this.countdownPaused = true;
+        this.callbacks.broadcastCountdown(this.room.code, -1);
+        return;
+      }
       this.countdownRemaining--;
       if (this.countdownRemaining <= 0) {
         this.clearTimers();
