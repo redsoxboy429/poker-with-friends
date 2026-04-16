@@ -247,9 +247,16 @@ export default function MultiplayerTable() {
       return;
     }
 
-    // Detect new hand (prev was null)
-    // This replaces dealNewHand()'s animation setup (App.tsx lines 943-973)
-    if (!prev) {
+    // Detect new hand — either first state ever (prev === null) OR prev hand
+    // was at showdown/complete and we've transitioned to an active phase.
+    // The latter case fixes a race condition where the showdown-clear useEffect
+    // would reset prevHandRef AFTER this effect already ran with stale prev data,
+    // causing hand 2+ to skip the deal animation until the first action arrived.
+    const isNewHandTransition = !!prev &&
+      (prev.phase === 'complete' || prev.phase === 'showdown') &&
+      curr.phase !== 'complete' && curr.phase !== 'showdown';
+
+    if (!prev || isNewHandTransition) {
       clearAnimTimers();
       setVisibleCommunityCount(0); visibleCommunityCountRef.current = 0;
       setDealtCardCounts({}); dealtCardCountsRef.current = {};
@@ -437,6 +444,8 @@ export default function MultiplayerTable() {
   // CRITICAL: only clear when finalState is null — otherwise we're still in the completed hand.
   // The HAND_STATE reducer clears finalState when a genuinely new hand-state arrives.
   // Without this guard, the old handState's non-complete phase immediately clears showdown.
+  // Note: new-hand animation is now triggered inside the animation effect itself via
+  // phase-transition detection (complete/showdown -> active), so we don't touch prevHandRef here.
   useEffect(() => {
     if (socketState.handState && !socketState.finalState &&
         socketState.handState.phase !== 'complete' && socketState.handState.phase !== 'showdown') {
@@ -445,7 +454,6 @@ export default function MultiplayerTable() {
         setIsRealShowdown(false);
         setWinInfo([]);
         setSelectedDiscardIndices(new Set());
-        prevHandRef.current = null; // Force new-hand animation
       }
     }
   }, [socketState.handState, socketState.finalState, showdown]);
