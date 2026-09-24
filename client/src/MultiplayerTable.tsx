@@ -10,7 +10,7 @@ import { PLAYABLE_VARIANTS } from './engine-wrapper';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useSocket } from './useSocket';
+import { useSocket, hasStoredSeat } from './useSocket';
 import { GameVariant, ActionType, GameMode } from './engine-wrapper';
 import {
   CardDisplay,
@@ -45,7 +45,9 @@ function rotateArray<T>(arr: T[], startIndex: number): T[] {
 }
 
 const MAX_LOG_ENTRIES = 200;
-const MAX_BUYIN_BB = 300;
+
+/** Round to whole $0.25 chips */
+const toChips = (x: number) => Math.round(x * 4) / 4;
 
 function CopyLinkButton({ link }: { link: string }) {
   const [copied, setCopied] = useState(false);
@@ -65,6 +67,25 @@ function CopyLinkButton({ link }: { link: string }) {
   );
 }
 
+/** Buy-in in dollars within the room's range (used in the lobby and mid-game). */
+function BuyInPanel({ min, max, value, onChange, onSitDown }: {
+  min: number; max: number; value: number;
+  onChange: (v: number) => void; onSitDown: () => void;
+}) {
+  return (
+    <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-600">
+      <label className="text-xs font-semibold text-slate-300 block mb-1">Buy-in: ${value.toFixed(2)}</label>
+      <input type="range" min={min} max={max} step={0.25} value={value}
+        onChange={e => onChange(toChips(Number(e.target.value)))} className="w-full accent-emerald-500" />
+      <div className="flex justify-between text-[10px] text-slate-500 mt-0.5 mb-2"><span>${min.toFixed(2)}</span><span>${max.toFixed(2)}</span></div>
+      <button onClick={onSitDown}
+        className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm transition-colors">
+        Sit Down (${value.toFixed(2)})
+      </button>
+    </div>
+  );
+}
+
 // ============================================================
 // Main Component
 // ============================================================
@@ -75,7 +96,8 @@ export default function MultiplayerTable() {
   const [socketState, socketActions] = useSocket();
 
   // --- Lobby state ---
-  const [buyInBB, setBuyInBB] = useState(100);
+  /** Buy-in in dollars; null until the player moves the slider (then the room default is used) */
+  const [buyInChoice, setBuyInChoice] = useState<number | null>(null);
   const [directJoinName, setDirectJoinName] = useState(() => localStorage.getItem('poker-player-name') || '');
   const [directJoinAttempted, setDirectJoinAttempted] = useState(false);
 
@@ -106,9 +128,6 @@ export default function MultiplayerTable() {
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [menuGameMode, setMenuGameMode] = useState<GameMode>(GameMode.DealersChoice);
   const [menuVariant, setMenuVariant] = useState<GameVariant>(GameVariant.NLH);
-
-  // --- Ledger (FROM App.tsx, keyed by player name for multiplayer) ---
-  const ledgerRef = useRef<Record<string, { totalBuyIn: number; totalBuyOut: number; name: string }>>({});
 
   // --- Animation refs (FROM App.tsx) ---
   const prevPhaseRef = useRef<string | null>(null);
@@ -172,7 +191,7 @@ export default function MultiplayerTable() {
   /** Animate hole cards dealt to players (FROM App.tsx lines 477-541)
    *  Adapted signature: takes players array instead of full HandState (server sends filtered view) */
   const animateHoleCards = useCallback(
-    (players: Array<{ id: string; holeCards: any[]; cardVisibility?: string[]; sittingOut?: boolean }>,
+    (players: Array<{ id: string; holeCards: unknown[]; cardVisibility?: string[]; sittingOut?: boolean }>,
      buttonIndex: number,
      prevCounts: Record<string, number>,
      onDone: () => void) => {
@@ -230,10 +249,26 @@ export default function MultiplayerTable() {
   // Socket effects — replaces processState() + dealNewHand()
   // ============================================================
 
-  // Connect on mount
+  // Connect on mount (connect() is a no-op while a socket exists, including during auto-reconnect)
+  const { connect } = socketActions;
   useEffect(() => {
-    if (socketState.status === 'disconnected') socketActions.connect();
-  }, []);
+    connect();
+  }, [connect]);
+
+  // After a refresh, resume the stored seat without asking for a name again (one automatic try).
+  const autoRejoinTriedRef = useRef(false);
+  useEffect(() => {
+    if (socketState.status === 'connected' && code && !socketState.roomState && !autoRejoinTriedRef.current && hasStoredSeat(code)) {
+      autoRejoinTriedRef.current = true;
+      socketActions.joinRoom(localStorage.getItem('poker-player-name') || '', code);
+      setDirectJoinAttempted(true);
+    }
+  }, [socketState.status, socketState.roomState, code, socketActions]);
+
+  // A failed join (bad code, name taken, room gone) returns to the name prompt instead of stranding.
+  useEffect(() => {
+    if (socketState.error && !socketState.roomState && directJoinAttempted) setDirectJoinAttempted(false);
+  }, [socketState.error, socketState.roomState, directJoinAttempted]);
 
   // Process incoming hand state — animate cards, track actions
   // This replaces processState()'s card animation branch (App.tsx lines 683-792)
@@ -425,16 +460,6 @@ export default function MultiplayerTable() {
     }
   }, [socketState.handState, socketState.finalState, showdown]);
 
-  // Initialize ledger when players sit down
-  useEffect(() => {
-    if (!socketState.roomState) return;
-    for (const p of socketState.roomState.players) {
-      if (p.seated && !ledgerRef.current[p.name]) {
-        ledgerRef.current[p.name] = { totalBuyIn: p.chips, totalBuyOut: 0, name: p.name };
-      }
-    }
-  }, [socketState.roomState]);
-
   // ============================================================
   // Action handlers — socket versions of App.tsx handlers
   // ============================================================
@@ -467,10 +492,9 @@ export default function MultiplayerTable() {
   const handleAddOnOpen = useCallback(() => {
     const roomState = socketState.roomState;
     if (!roomState) return;
-    const bb = roomState.settings.bigBlind;
-    const maxBuyIn = MAX_BUYIN_BB * bb;
+    const maxBuyIn = roomState.settings.buyInMax ?? Infinity;
     const myPlayer = roomState.players.find(p =>
-      p.seatIndex === (socketState.yourPlayerId ? parseInt(socketState.yourPlayerId.slice(1)) : -1)
+      p.playerId === socketState.yourPlayerId
     );
     if (!myPlayer) return;
     // Use max of current chips and any queued add-on as the floor
@@ -489,25 +513,19 @@ export default function MultiplayerTable() {
     const roomState = socketState.roomState;
     if (!roomState) return;
     const myPlayer = roomState.players.find(p =>
-      p.seatIndex === (socketState.yourPlayerId ? parseInt(socketState.yourPlayerId.slice(1)) : -1)
+      p.playerId === socketState.yourPlayerId
     );
     if (!myPlayer) return;
     const effectiveChips = Math.max(myPlayer.chips, myPlayer.queuedAddOn ?? 0);
-    const addAmount = addOnAmount - effectiveChips;
-    if (addAmount <= 0) { setShowAddOn(false); if (socketState.isHost && !socketState.handState) socketActions.resumeCountdown(); return; }
+    if (addOnAmount <= effectiveChips) { setShowAddOn(false); if (socketState.isHost && !socketState.handState) socketActions.resumeCountdown(); return; }
 
+    // Top up TO the amount. The server applies it now between hands, or after
+    // this hand settles (never lowering a stack that has since grown).
     socketActions.addOn(addOnAmount);
-    // Server will queue during active hand or apply immediately if between hands.
-    // Detect which case based on whether a hand is in progress.
     const handInProgress = !!socketState.handState && !showdown;
-    if (ledgerRef.current[myPlayer.name]) {
-      ledgerRef.current[myPlayer.name].totalBuyIn += addAmount;
-    }
-    if (handInProgress) {
-      addLog(`${myPlayer.name}: Queued add-on of $${addAmount.toFixed(2)} (applies next hand)`);
-    } else {
-      addLog(`${myPlayer.name}: Added on $${addAmount.toFixed(2)}`);
-    }
+    addLog(handInProgress
+      ? `${myPlayer.name}: Top-up to $${addOnAmount.toFixed(2)} queued (applies after this hand)`
+      : `${myPlayer.name}: Topped up to $${addOnAmount.toFixed(2)}`);
     setShowAddOn(false);
     if (socketState.isHost && !socketState.handState) socketActions.resumeCountdown();
   }, [addOnAmount, socketState.roomState, socketState.yourPlayerId, socketState.isHost, socketState.handState, showdown, socketActions, addLog]);
@@ -575,9 +593,12 @@ export default function MultiplayerTable() {
     const roomLink = `${window.location.origin}/room/${roomState.code}`;
     const seatedCount = roomState.players.filter(p => p.seated && p.connected).length;
     const canStart = seatedCount >= 2;
-    const myPlayer = roomState.players.find(p => p.seatIndex === (socketState.yourPlayerId ? parseInt(socketState.yourPlayerId.slice(1)) : -1));
+    const myPlayer = roomState.players.find(p => p.playerId === socketState.yourPlayerId);
     const iAmSeated = myPlayer?.seated ?? false;
     const bb = roomState.settings.bigBlind;
+    const buyInMin = roomState.settings.buyInMin ?? 50 * bb;
+    const buyInMax = roomState.settings.buyInMax ?? 300 * bb;
+    const buyIn = buyInChoice ?? toChips(Math.min(Math.max(100 * bb, buyInMin), buyInMax));
 
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -617,18 +638,8 @@ export default function MultiplayerTable() {
             ))}
           </div>
           {!iAmSeated && (
-            <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-600">
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Buy-in: {buyInBB} BB {bb > 0 && <span className="text-slate-500">(${(buyInBB * bb).toFixed(2)})</span>}
-              </label>
-              <input type="range" min="50" max="300" step="10" value={buyInBB}
-                onChange={e => setBuyInBB(Number(e.target.value))} className="w-full accent-emerald-500" />
-              <div className="flex justify-between text-[10px] text-slate-500 mt-0.5 mb-2"><span>50 BB</span><span>300 BB</span></div>
-              <button onClick={() => socketActions.sitDown(buyInBB)}
-                className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm transition-colors">
-                Sit Down (${(buyInBB * bb).toFixed(2)})
-              </button>
-            </div>
+            <BuyInPanel min={buyInMin} max={buyInMax} value={buyIn} onChange={setBuyInChoice}
+              onSitDown={() => socketActions.sitDown(buyIn)} />
           )}
           {socketState.isHost && canStart && iAmSeated && (
             <button onClick={() => socketActions.startHand()}
@@ -655,7 +666,10 @@ export default function MultiplayerTable() {
   const positions = SEAT_POSITIONS[numPlayers] || SEAT_POSITIONS[4];
   const betPositions = BET_OFFSETS[numPlayers] || BET_OFFSETS[4];
   const bb = roomState.settings.bigBlind;
-  const maxBuyIn = MAX_BUYIN_BB * bb;
+  const maxBuyIn = roomState.settings.buyInMax ?? 300 * bb;
+  const tableBuyInMin = roomState.settings.buyInMin ?? 50 * bb;
+  const tableBuyIn = buyInChoice ?? toChips(Math.min(Math.max(100 * bb, tableBuyInMin), maxBuyIn));
+  const awayIds = new Set(roomState.players.filter(p => !p.connected || p.leaving).map(p => p.playerId));
 
   // Pot calculations (FROM App.tsx lines 1178-1188)
   const collectedPot = gameState ? gameState.pots.reduce((s, p) => s + p.amount, 0) : 0;
@@ -673,7 +687,7 @@ export default function MultiplayerTable() {
 
   // My room player info
   const myRoomPlayer = roomState.players.find(p =>
-    p.seatIndex === (socketState.yourPlayerId ? parseInt(socketState.yourPlayerId.slice(1)) : -1)
+    p.playerId === socketState.yourPlayerId
   );
 
   return (
@@ -711,7 +725,7 @@ export default function MultiplayerTable() {
             <button onClick={handleAddOnOpen}
               className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded text-[10px] font-medium transition-colors"
               title="Top up your stack">
-              {myRoomPlayer.queuedAddOn ? `Add On ($${myRoomPlayer.queuedAddOn.toFixed(0)} queued)` : 'Add On'}
+              {myRoomPlayer.queuedAddOn ? `Top Up (to $${myRoomPlayer.queuedAddOn.toFixed(2)} after hand)` : 'Top Up'}
             </button>
           )}
           {/* Game Menu (host only) */}
@@ -746,21 +760,21 @@ export default function MultiplayerTable() {
               <tr className="text-slate-500 border-b border-slate-700">
                 <th className="text-left py-1 pr-3">Player</th>
                 <th className="text-right py-1 px-2">Buy-ins</th>
-                <th className="text-right py-1 px-2">Buy-outs</th>
+                <th className="text-right py-1 px-2">Cashed out</th>
                 <th className="text-right py-1 px-2">Stack</th>
                 <th className="text-right py-1 pl-2">Net</th>
               </tr>
             </thead>
             <tbody>
-              {roomState.players.filter(p => p.seated).map(p => {
-                const ledger = ledgerRef.current[p.name] ?? { totalBuyIn: p.chips, totalBuyOut: 0, name: p.name };
-                const net = p.chips + ledger.totalBuyOut - ledger.totalBuyIn;
+              {/* Server-owned ledger: same on every device, survives refresh, keeps players who left */}
+              {roomState.ledger.map(row => {
+                const net = row.stack + row.cashOut - row.buyIn;
                 return (
-                  <tr key={p.name} className="border-b border-slate-800">
-                    <td className="py-1.5 pr-3 text-white font-medium">{p.name}</td>
-                    <td className="py-1.5 px-2 text-right text-slate-400">${ledger.totalBuyIn.toFixed(2)}</td>
-                    <td className="py-1.5 px-2 text-right text-slate-400">${ledger.totalBuyOut.toFixed(2)}</td>
-                    <td className="py-1.5 px-2 text-right text-slate-300">${p.chips.toFixed(2)}</td>
+                  <tr key={row.memberId} className="border-b border-slate-800">
+                    <td className={`py-1.5 pr-3 font-medium ${row.left ? 'text-slate-500' : 'text-white'}`}>{row.name}{row.left ? ' (left)' : ''}</td>
+                    <td className="py-1.5 px-2 text-right text-slate-400">${row.buyIn.toFixed(2)}</td>
+                    <td className="py-1.5 px-2 text-right text-slate-400">${row.cashOut.toFixed(2)}</td>
+                    <td className="py-1.5 px-2 text-right text-slate-300">${row.stack.toFixed(2)}</td>
                     <td className={`py-1.5 pl-2 text-right font-semibold ${net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {net >= 0 ? '+' : ''}{net.toFixed(2)}
                     </td>
@@ -776,20 +790,20 @@ export default function MultiplayerTable() {
       {showAddOn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-slate-900 border border-slate-600 rounded-xl shadow-2xl p-6 min-w-[320px] max-w-[400px]">
-            <h3 className="text-lg font-bold text-white mb-4">Add On</h3>
-            {/* Queued-add-on notice if a hand is currently active */}
+            <h3 className="text-lg font-bold text-white mb-4">Top Up</h3>
+            {/* Queued notice if a hand is currently active */}
             {socketState.handState && !showdown && (
               <div className="bg-amber-900/30 border border-amber-600/40 rounded p-2 mb-3 text-xs text-amber-300">
-                A hand is in progress. Your add-on will be applied on the next hand.
+                A hand is in progress. Your stack is topped up to this amount after the hand; winnings are never reduced.
               </div>
             )}
-            <p className="text-sm text-slate-400 mb-3">Set chips to:</p>
+            <p className="text-sm text-slate-400 mb-3">Top up to:</p>
             <div className="flex items-center gap-3 mb-4">
               <input type="range"
                 min={Math.max(myRoomPlayer?.chips ?? 0, myRoomPlayer?.queuedAddOn ?? 0)}
                 max={maxBuyIn}
-                step={roomState.settings.smallBlind} value={addOnAmount}
-                onChange={e => setAddOnAmount(parseFloat(e.target.value))} className="flex-1 accent-emerald-500" />
+                step={0.25} value={addOnAmount}
+                onChange={e => setAddOnAmount(toChips(parseFloat(e.target.value)))} className="flex-1 accent-emerald-500" />
               <span className="text-lg font-bold text-emerald-300 w-20 text-right">${addOnAmount.toFixed(2)}</span>
             </div>
             <p className="text-xs text-slate-500 mb-4">Adding ${Math.max(0, addOnAmount - Math.max(myRoomPlayer?.chips ?? 0, myRoomPlayer?.queuedAddOn ?? 0)).toFixed(2)}</p>
@@ -810,12 +824,7 @@ export default function MultiplayerTable() {
             <h3 className="text-lg font-bold text-white mb-3">Leave Table</h3>
             <p className="text-sm text-slate-400 mb-4">Cash out ${(myRoomPlayer?.chips ?? 0).toFixed(2)} and leave?</p>
             <div className="flex flex-col gap-2">
-              <button onClick={() => {
-                if (myRoomPlayer && ledgerRef.current[myRoomPlayer.name]) {
-                  ledgerRef.current[myRoomPlayer.name].totalBuyOut += myRoomPlayer.chips;
-                }
-                socketActions.leaveRoom(); navigate('/');
-              }} className="w-full px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">Leave Table</button>
+              <button onClick={() => { socketActions.leaveRoom(); navigate('/'); }} className="w-full px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">Leave Table</button>
               {socketState.isHost && (
                 <button onClick={() => { socketActions.stopGame(); setShowCashOut(false); }}
                   className="w-full px-4 py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-semibold transition-colors">Stop Game (Back to Lobby)</button>
@@ -914,7 +923,15 @@ export default function MultiplayerTable() {
 
                 {/* Pot or Win Display (FROM App.tsx lines 1457-1490) */}
                 {showdown && winInfo.length > 0 ? (
-                  <WinDisplay winInfo={winInfo} variant={gameState.variant} />
+                  <>
+                    <WinDisplay winInfo={winInfo} variant={gameState.variant} />
+                    {/* Uncalled bets were returned, not won */}
+                    {(gameState.uncalledReturns ?? []).map((r, i) => (
+                      <div key={`uncalled-${i}`} className="text-[10px] text-slate-300/70 mt-0.5">
+                        ${r.amount.toFixed(2)} uncalled, returned to {gameState.players.find(p => p.id === r.playerId)?.name ?? r.playerId}
+                      </div>
+                    ))}
+                  </>
                 ) : (
                   <PotDisplay collectedAmount={collectedPot} totalAmount={potTotal} pots={(() => {
                     if (!gameState || gameState.pots.length <= 1) return undefined;
@@ -948,7 +965,7 @@ export default function MultiplayerTable() {
           {gameState && rotatedPlayers.map((player, i) => (
             <PlayerSeat
               key={player.id}
-              player={player}
+              player={awayIds.has(player.id) ? { ...player, name: `${player.name} (away)` } : player}
               isActive={i === rotatedActiveIndex && !showdown}
               isDealer={i === rotatedButtonIndex}
               isHuman={player.id === myId}
@@ -1045,7 +1062,13 @@ export default function MultiplayerTable() {
 
       {/* ======== Bottom Bar — Actions (FROM App.tsx lines 1630-1704, multiplayer version) ======== */}
       <div className="flex-shrink-0 px-4 pb-3 pt-1">
-        {isDrawPhase && socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && gameState ? (
+        {myRoomPlayer && !myRoomPlayer.seated ? (
+          // Arrived mid-game: buy in now, dealt in from the next hand
+          <div className="max-w-xs mx-auto">
+            <BuyInPanel min={tableBuyInMin} max={maxBuyIn} value={tableBuyIn} onChange={setBuyInChoice}
+              onSitDown={() => socketActions.sitDown(tableBuyIn)} />
+          </div>
+        ) : isDrawPhase && socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && gameState ? (
           <div className="flex flex-wrap items-center gap-2 justify-center">
             <span className="text-xs text-slate-400">Click cards to select for discard, then:</span>
             <button onClick={handleDiscard}
@@ -1055,6 +1078,8 @@ export default function MultiplayerTable() {
           </div>
         ) : socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && socketState.availableActions && gameState ? (
           <ActionPanel
+            // Remount per decision so the bet amount resets to the new legal range
+            key={`${gameState.id}-${gameState.actionHistory.length}`}
             actions={socketState.availableActions}
             onAction={handleAction}
             bettingStructure={gameState.bettingStructure}

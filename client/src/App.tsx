@@ -32,7 +32,6 @@ import {
   GameLog,
   decomposeChips,
 } from './components';
-import type { WinEntry } from './components';
 import {
   HUMAN_ID,
   BOT_ACTION_DELAY,
@@ -355,7 +354,7 @@ export default function App() {
   // Animated card counts — how many cards are currently "revealed"
   const [visibleCommunityCount, setVisibleCommunityCount] = useState(0);
   const [dealtCardCounts, setDealtCardCounts] = useState<Record<string, number>>({});
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [, setIsAnimating] = useState(false);
   const [isAllInRunout, setIsAllInRunout] = useState(false);
   // Stud: force all cards face-down during initial deal, then reveal door cards
   const [studForceDown, setStudForceDown] = useState(false);
@@ -726,7 +725,7 @@ export default function App() {
               if (isDrawPhase && (isDrawGame(game) || isDrawmahaGame(game))) {
                 // Bot draw: use AI to pick discards
                 const discardIndices = getBotDiscardIndices(activePlayer.holeCards);
-                const done = game.discard(activePlayer.id, discardIndices);
+                game.discard(activePlayer.id, discardIndices);
                 const drawLabel = discardIndices.length === 0 ? 'Stand Pat' : `Drew ${discardIndices.length}`;
                 addLog(`${activePlayer.name}: ${drawLabel}`);
                 setLastDrawActions((prev) => ({
@@ -823,7 +822,7 @@ export default function App() {
             const allVariants = PLAYABLE_VARIANTS;
             const pick = allVariants[Math.floor(Math.random() * allVariants.length)];
             session.setDealersChoice(pick, buttonIndex % numPlayers);
-            addLog(`--- ${playersRef.current[sessionState.chooserSeatIndex]?.name ?? 'Bot'} picks ${VARIANT_LABELS[pick]} ---`);
+            addLog(`--- ${playersRef.current[sessionState.chooserSeatIndex ?? 0]?.name ?? 'Bot'} picks ${VARIANT_LABELS[pick]} ---`);
           }
         }
       }
@@ -846,7 +845,7 @@ export default function App() {
             const allVariants = PLAYABLE_VARIANTS;
             const pick = allVariants[Math.floor(Math.random() * allVariants.length)];
             session.setDealersChoice(pick, buttonIndex % numPlayers);
-            addLog(`--- ${playersRef.current[sessionState.chooserSeatIndex]?.name ?? 'Bot'} picks ${VARIANT_LABELS[pick]} ---`);
+            addLog(`--- ${playersRef.current[sessionState.chooserSeatIndex ?? 0]?.name ?? 'Bot'} picks ${VARIANT_LABELS[pick]} ---`);
           }
         }
       }
@@ -1648,6 +1647,7 @@ export default function App() {
                 </div>
               ) : isHumanTurn && availableActions && gameState ? (
                 <ActionPanel
+                  key={`${gameState.id}-${gameState.actionHistory.length}`}
                   actions={availableActions}
                   onAction={handleAction}
                   bettingStructure={gameState.bettingStructure}

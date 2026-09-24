@@ -179,7 +179,7 @@ export class GameSession {
    * @param buttonIndex - The button index for the hand that just completed.
    *   Used for dealer's choice orbit tracking.
    */
-  advanceHand(buttonIndex: number): void {
+  advanceHand(_buttonIndex: number): void {
     if (this.mode === GameMode.SpecificGame) {
       // Nothing to track
       return;

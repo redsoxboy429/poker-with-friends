@@ -11,10 +11,10 @@
 
 import { BaseDrawmahaGame } from './drawmaha-base.js';
 import {
-  PlayerState,
-  TableConfig,
-  HandResult,
-  Card,
+  type PlayerState,
+  type TableConfig,
+  type HandResult,
+  type Card,
 } from '../types.js';
 import {
   bestPipCountHand,

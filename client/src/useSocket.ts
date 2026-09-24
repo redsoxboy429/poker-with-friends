@@ -46,7 +46,7 @@ export interface SocketState {
   lastAction: { playerId: string; type: string; amount?: number; discardCount?: number } | null;
   handDescription: string | null;
   handDescriptions: Record<string, string> | null;
-  sessionState: { mode: string; handInVariant: number; handsPerVariant: number; rotationIndex: number; rotationLength: number; currentVariant: string | null; chooserSeatIndex: number | null; capBB: number | null } | null;
+  sessionState: { mode: string; handInVariant: number; handsPerVariant: number; rotationIndex: number; rotationLength: number; currentVariant: string | null; chooserSeatIndex: number | null; needsChoice?: boolean; capBB: number | null; buttonSeat?: number | null } | null;
   chipsBehind: Record<string, number> | null;
 }
 
@@ -55,7 +55,8 @@ export interface SocketActions {
   disconnect: () => void;
   createRoom: (playerName: string, settings: RoomSettings) => void;
   joinRoom: (playerName: string, roomCode: string) => void;
-  sitDown: (buyInBB: number) => void;
+  /** Buy in with a dollar amount */
+  sitDown: (buyIn: number) => void;
   leaveRoom: () => void;
   sendAction: (type: ActionType, amount?: number) => void;
   sendDiscard: (cardIndices: number[]) => void;
@@ -101,10 +102,10 @@ const INITIAL_STATE: SocketState = {
 
 type SocketAction =
   | { type: 'SET_STATUS'; status: ConnectionStatus }
-  | { type: 'ROOM_CREATED'; roomState: RoomStateView }
+  | { type: 'ROOM_CREATED'; roomState: RoomStateView; yourPlayerId: string }
   | { type: 'ROOM_JOINED'; roomState: RoomStateView; yourPlayerId: string }
   | { type: 'ROOM_STATE'; roomState: RoomStateView; isHost: boolean }
-  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string; sessionState?: any; chipsBehind?: Record<string, number> }
+  | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string; sessionState?: SocketState['sessionState']; chipsBehind?: Record<string, number> }
   | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView; handDescriptions: Record<string, string>; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number } }
   | { type: 'DC_CHOOSE' }
   | { type: 'DC_PICKED' }
@@ -123,10 +124,10 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         : { ...state, status: action.status };
 
     case 'ROOM_CREATED':
-      return { ...state, roomState: action.roomState, yourPlayerId: 'p0', isHost: true };
+      return { ...state, roomState: action.roomState, yourPlayerId: action.yourPlayerId, isHost: true };
 
     case 'ROOM_JOINED':
-      return { ...state, roomState: action.roomState, yourPlayerId: action.yourPlayerId, isHost: false };
+      return { ...state, roomState: action.roomState, yourPlayerId: action.yourPlayerId };
 
     case 'ROOM_STATE':
       return { ...state, roomState: action.roomState, isHost: action.isHost };
@@ -191,15 +192,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
       };
 
     case 'LEAVE_ROOM':
-      return {
-        ...state,
-        roomState: null,
-        handState: null,
-        winners: null,
-        finalState: null,
-        yourPlayerId: null,
-        isHost: false,
-      };
+      return { ...INITIAL_STATE, status: state.status, error: state.error };
 
     case 'DISCONNECT':
       return { ...INITIAL_STATE };
@@ -230,12 +223,32 @@ export function useSocket(): SocketContextValue {
 // Internal hook — the actual socket logic (used once by provider)
 // ============================================================
 
+/** Reconnect credentials are kept per room so a refresh or dropped connection can resume the seat. */
+const tokenKey = (roomCode: string) => `poker-token-${roomCode.toUpperCase()}`;
+function readToken(roomCode: string): string | undefined {
+  try { return localStorage.getItem(tokenKey(roomCode)) ?? undefined; } catch { return undefined; }
+}
+function writeToken(roomCode: string, token: string | null): void {
+  try {
+    if (token) localStorage.setItem(tokenKey(roomCode), token);
+    else localStorage.removeItem(tokenKey(roomCode));
+  } catch { /* storage unavailable: reconnect falls back to a fresh join */ }
+}
+
+/** Does this browser hold a reconnect token for the room (e.g. after a refresh)? */
+export function hasStoredSeat(roomCode: string): boolean {
+  return !!readToken(roomCode);
+}
+
 function useSocketInternal(): SocketContextValue {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
   const [state, dispatch] = useReducer(socketReducer, INITIAL_STATE);
+  /** Room this client is in, for automatic rejoin after a reconnect */
+  const roomRef = useRef<{ code: string; name: string } | null>(null);
 
   const connect = useCallback(() => {
-    if (socketRef.current?.connected) return;
+    // One socket per client: socket.io reconnects it itself, so never open a second one.
+    if (socketRef.current) return;
 
     dispatch({ type: 'SET_STATUS', status: 'connecting' });
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SERVER_URL, {
@@ -245,6 +258,10 @@ function useSocketInternal(): SocketContextValue {
 
     socket.on('connect', () => {
       dispatch({ type: 'SET_STATUS', status: 'connected' });
+      // After a dropped connection, resume the same seat with the stored token.
+      const room = roomRef.current;
+      const token = room ? readToken(room.code) : undefined;
+      if (room && token) socket.emit('join-room', { playerName: room.name, roomCode: room.code, token });
     });
 
     socket.on('disconnect', () => {
@@ -253,11 +270,22 @@ function useSocketInternal(): SocketContextValue {
 
     // Room events
     socket.on('room-created', (data) => {
-      dispatch({ type: 'ROOM_CREATED', roomState: data.roomState });
+      writeToken(data.roomCode, data.token);
+      roomRef.current = { code: data.roomCode, name: data.roomState.players.find(p => p.playerId === data.yourPlayerId)?.name ?? '' };
+      dispatch({ type: 'ROOM_CREATED', roomState: data.roomState, yourPlayerId: data.yourPlayerId });
     });
 
     socket.on('room-joined', (data) => {
+      writeToken(data.roomState.code, data.token);
+      roomRef.current = { code: data.roomState.code, name: data.roomState.players.find(p => p.playerId === data.yourPlayerId)?.name ?? '' };
       dispatch({ type: 'ROOM_JOINED', roomState: data.roomState, yourPlayerId: data.yourPlayerId });
+    });
+
+    socket.on('removed', (data) => {
+      if (roomRef.current) writeToken(roomRef.current.code, null);
+      roomRef.current = null;
+      dispatch({ type: 'LEAVE_ROOM' });
+      dispatch({ type: 'ERROR', message: data.reason });
     });
 
     socket.on('room-state', (data) => {
@@ -327,15 +355,18 @@ function useSocketInternal(): SocketContextValue {
   }, []);
 
   const joinRoom = useCallback((playerName: string, roomCode: string) => {
-    socketRef.current?.emit('join-room', { playerName, roomCode: roomCode.toUpperCase() });
+    const code = roomCode.toUpperCase();
+    socketRef.current?.emit('join-room', { playerName, roomCode: code, token: readToken(code) });
   }, []);
 
-  const sitDown = useCallback((buyInBB: number) => {
-    socketRef.current?.emit('sit-down', { buyInBB });
+  const sitDown = useCallback((buyIn: number) => {
+    socketRef.current?.emit('sit-down', { buyIn });
   }, []);
 
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('leave-room');
+    if (roomRef.current) writeToken(roomRef.current.code, null);
+    roomRef.current = null;
     dispatch({ type: 'LEAVE_ROOM' });
   }, []);
 

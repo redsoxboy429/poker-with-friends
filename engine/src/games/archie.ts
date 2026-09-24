@@ -1,13 +1,13 @@
 import { BaseDrawGame } from './draw-base.js';
 import {
-  PlayerState,
-  TableConfig,
+  type PlayerState,
+  type TableConfig,
   GameVariant,
   BettingStructure,
-  HandResult,
-  LowHandResult,
+  type HandResult,
+  type LowHandResult,
   HandCategory,
-  Card,
+  type Card,
 } from '../types.js';
 import { evaluate5CardHigh, bestEightOrBetterLow } from '../evaluator.js';
 

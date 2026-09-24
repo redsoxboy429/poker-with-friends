@@ -8,13 +8,12 @@
 
 import { BaseStudGame } from './stud-base.js';
 import {
-  HandResult,
+  type HandResult,
   HandCategory,
-  LowHandResult,
-  PlayerState,
-  TableConfig,
+  type LowHandResult,
+  type PlayerState,
+  type TableConfig,
   GameVariant,
-  Rank,
 } from '../types.js';
 import { bestLowHand } from '../evaluator.js';
 

@@ -34,6 +34,16 @@ export default function LobbyPage() {
   // Limit game fields
   const [smallBet, setSmallBet] = useState(2);
   const [bigBet, setBigBet] = useState(4);
+  // Stud forced bets and buy-in range: null = follow the default derived from the stakes
+  const [anteChoice, setAnteChoice] = useState<number | null>(null);
+  const [bringInChoice, setBringInChoice] = useState<number | null>(null);
+  const [buyInMinChoice, setBuyInMinChoice] = useState<number | null>(null);
+  const [buyInMaxChoice, setBuyInMaxChoice] = useState<number | null>(null);
+  const studDefault = Math.max(0.25, Math.floor(smallBet / 4 / 0.25) * 0.25);
+  const ante = anteChoice ?? studDefault;
+  const bringIn = bringInChoice ?? studDefault;
+  const buyInMin = buyInMinChoice ?? 50 * bigBlind;
+  const buyInMax = buyInMaxChoice ?? 300 * bigBlind;
 
   // Variant selection (for Specific Game mode)
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -44,9 +54,10 @@ export default function LobbyPage() {
   const [joinName, setJoinName] = useState(() => localStorage.getItem(STORED_NAME_KEY) || '');
   const [roomCode, setRoomCode] = useState('');
   // Connect socket on mount
+  const { connect } = socketActions;
   useEffect(() => {
-    socketActions.connect();
-  }, [socketActions.connect]);
+    connect();
+  }, [connect]);
 
   // Navigate to room once created/joined
   useEffect(() => {
@@ -72,8 +83,11 @@ export default function LobbyPage() {
       variant: gameMode === GameMode.SpecificGame ? selectedVariant : undefined,
       smallBlind,
       bigBlind,
-      startingChips: 100 * bigBlind, // Default (players choose their own at the table)
-      ...(showLimitFields ? { smallBet, bigBet } : {}),
+      startingChips: buyInMin,
+      buyInMin,
+      buyInMax,
+      // The server validates everything (whole $0.25 chips, big bet = 2 × small bet, …)
+      ...(showLimitFields ? { smallBet, bigBet, ante, bringIn } : {}),
     };
     socketActions.createRoom(playerName.trim(), settings);
   };
@@ -248,6 +262,32 @@ export default function LobbyPage() {
                   </div>
                 </div>
               )}
+
+              {/* Stud forced bets (default: a quarter of the small bet) */}
+              {showLimitFields && (
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-[11px] text-slate-400">Stud Ante</label>
+                    <input type="number" value={ante} onChange={(e) => setAnteChoice(Number(e.target.value) || 0)} step="0.25" className={inputClass} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[11px] text-slate-400">Stud Bring-in</label>
+                    <input type="number" value={bringIn} onChange={(e) => setBringInChoice(Number(e.target.value) || 0)} step="0.25" className={inputClass} />
+                  </div>
+                </div>
+              )}
+
+              {/* Buy-in range in dollars (also the top-up maximum) */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[11px] text-slate-400">Min Buy-in ($)</label>
+                  <input type="number" value={buyInMin} onChange={(e) => setBuyInMinChoice(Number(e.target.value) || 0)} step="0.25" className={inputClass} />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[11px] text-slate-400">Max Buy-in ($)</label>
+                  <input type="number" value={buyInMax} onChange={(e) => setBuyInMaxChoice(Number(e.target.value) || 0)} step="0.25" className={inputClass} />
+                </div>
+              </div>
 
               <button
                 onClick={handleCreate}

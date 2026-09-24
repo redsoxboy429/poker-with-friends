@@ -18,11 +18,11 @@ import { BaseGame } from './base.js';
 import {
   GamePhase,
   ActionType,
-  PlayerState,
-  TableConfig,
+  type PlayerState,
+  type TableConfig,
   BettingStructure,
-  HandResult,
-  Card,
+  type HandResult,
+  type Card,
 } from '../types.js';
 import { collectBets } from '../betting.js';
 
@@ -33,7 +33,6 @@ import { collectBets } from '../betting.js';
  */
 export abstract class BaseDrawmahaGame extends BaseGame {
   private isPotLimit: boolean;
-  private drawCompleted: boolean = false;
 
   constructor(config: TableConfig, players: PlayerState[], buttonIndex: number) {
     super(config, players, buttonIndex);
@@ -270,7 +269,6 @@ export abstract class BaseDrawmahaGame extends BaseGame {
 
     if (allDrawn) {
       // All have drawn — transition to next phase
-      this.drawCompleted = true;
       const activePlayers = this.state.players.filter(p => !p.folded && !p.sittingOut);
 
       if (this.isPotLimit) {

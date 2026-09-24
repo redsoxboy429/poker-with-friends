@@ -10,10 +10,10 @@
 
 import { BaseStudGame } from './stud-base.js';
 import {
-  HandResult,
-  LowHandResult,
-  PlayerState,
-  TableConfig,
+  type HandResult,
+  type LowHandResult,
+  type PlayerState,
+  type TableConfig,
   GameVariant,
 } from '../types.js';
 import { bestHighHand, bestEightOrBetterLow } from '../evaluator.js';

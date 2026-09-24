@@ -14,12 +14,10 @@ import { BaseGame } from './base.js';
 import {
   GamePhase,
   ActionType,
-  PlayerState,
-  TableConfig,
-  BettingStructure,
-  HandResult,
+  type PlayerState,
+  type TableConfig,
+  type HandResult,
 } from '../types.js';
-import { collectBets } from '../betting.js';
 
 /**
  * Abstract base class for draw poker variants.

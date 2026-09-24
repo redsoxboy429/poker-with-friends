@@ -2,7 +2,7 @@
 // ActionPanel — betting controls at bottom of screen
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   GamePhase,
   ActionType,
@@ -37,10 +37,10 @@ export function ActionPanel({
   const [raiseAmount, setRaiseAmount] = useState(sizeMin);
   const [inputText, setInputText] = useState(String(sizeMin));
 
-  useEffect(() => {
-    setRaiseAmount(sizeMin);
-    setInputText(String(sizeMin));
-  }, [sizeMin]);
+  // Fixed limit with a choice of sizes: one button per legal amount.
+  const isBringIn = phase === GamePhase.BettingThird && !!actions.betOptions && !actions.canCheck && !actions.canFold;
+  const optionLabel = (amount: number, i: number, kind: 'bet' | 'raise') =>
+    kind === 'raise' ? `Raise to ${amount}` : isBringIn ? (i === 0 ? `Bring in ${amount}` : `Complete ${amount}`) : `Bet ${amount}`;
 
   const handleSlider = (val: number) => {
     const snapped = Math.round(val / minChip) * minChip;
@@ -106,7 +106,19 @@ export function ActionPanel({
         <button onClick={() => onAction(ActionType.Call)}
           className={`${btnBase} bg-green-700 hover:bg-green-600 text-white shadow-green-900/30`}>Call {actions.callAmount}</button>
       )}
-      {actions.canBet && (
+      {actions.canBet && actions.betOptions && actions.betOptions.map((amount, i) => (
+        <button key={`bet-${amount}`} onClick={() => onAction(ActionType.Bet, amount)}
+          className={`${btnBase} bg-blue-700 hover:bg-blue-600 text-white shadow-blue-900/30`}>
+          {optionLabel(amount, i, 'bet')}
+        </button>
+      ))}
+      {actions.canRaise && actions.raiseOptions && actions.raiseOptions.map((amount, i) => (
+        <button key={`raise-${amount}`} onClick={() => onAction(ActionType.Raise, amount)}
+          className={`${btnBase} bg-purple-700 hover:bg-purple-600 text-white shadow-purple-900/30`}>
+          {optionLabel(amount, i, 'raise')}
+        </button>
+      ))}
+      {actions.canBet && !actions.betOptions && (
         <div className="flex items-center gap-2">
           <button onClick={() => onAction(ActionType.Bet, isFixedLimit ? actions.minBet : raiseAmount)}
             className={`${btnBase} bg-blue-700 hover:bg-blue-600 text-white shadow-blue-900/30 w-[140px]`}>
@@ -115,7 +127,7 @@ export function ActionPanel({
           {isBetting && sizingControls(actions.minBet, actions.maxBet, 'accent-blue-500')}
         </div>
       )}
-      {actions.canRaise && (
+      {actions.canRaise && !actions.raiseOptions && (
         <div className="flex items-center gap-2">
           <button onClick={() => onAction(ActionType.Raise, isFixedLimit ? actions.minRaise : raiseAmount)}
             className={`${btnBase} bg-purple-700 hover:bg-purple-600 text-white shadow-purple-900/30 w-[140px]`}>

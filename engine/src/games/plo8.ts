@@ -7,10 +7,10 @@
 
 import { BaseFlopGame } from './flop-base.js';
 import {
-  HandResult,
-  LowHandResult,
-  PlayerState,
-  TableConfig,
+  type HandResult,
+  type LowHandResult,
+  type PlayerState,
+  type TableConfig,
   GameVariant,
   BettingStructure,
 } from '../types.js';

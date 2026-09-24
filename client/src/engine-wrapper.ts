@@ -7,7 +7,6 @@
 import type { BaseGame, WinnerInfo } from '@engine/games/base.ts';
 import { BaseDrawGame } from '@engine/games/draw-base.ts';
 import { BaseDrawmahaGame } from '@engine/games/drawmaha-base.ts';
-import { createGame } from '@engine/factory.ts';
 import {
   type PlayerState,
   type TableConfig,
@@ -378,7 +377,7 @@ export { createGame } from '@engine/factory.ts';
  * Enough to test the game flow.
  */
 export function getBotAction(
-  state: HandState,
+  _state: HandState,
   actions: AvailableActions,
   playerName?: string,
 ): { type: ActionType; amount?: number } {

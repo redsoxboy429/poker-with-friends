@@ -17,10 +17,8 @@ import { BaseGame } from './base.js';
 import {
   GamePhase,
   ActionType,
-  HandResult,
-  PlayerState,
-  TableConfig,
-  BettingStructure,
+  type PlayerState,
+  type TableConfig,
 } from '../types.js';
 
 /**

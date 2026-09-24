@@ -13,10 +13,10 @@ import { BaseGame } from './base.js';
 import {
   GamePhase,
   ActionType,
-  PlayerState,
-  TableConfig,
-  HandState,
-  Card,
+  type PlayerState,
+  type TableConfig,
+  type HandState,
+  type Card,
   Rank,
   BettingStructure,
 } from '../types.js';
@@ -56,7 +56,6 @@ export abstract class BaseStudGame extends BaseGame {
     const base = { ...this.state };
     base.players = base.players.map(p => {
       const up = this.upCards.get(p.id) || [];
-      const down = this.downCards.get(p.id) || [];
       // Build visibility array parallel to holeCards
       const visibility: ('up' | 'down')[] = p.holeCards.map(card => {
         if (up.includes(card)) return 'up';

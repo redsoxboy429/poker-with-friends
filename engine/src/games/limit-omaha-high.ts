@@ -1,5 +1,5 @@
 import { BaseFlopGame } from './flop-base.js';
-import { HandResult, PlayerState, TableConfig, BettingStructure, Card } from '../types.js';
+import { type HandResult, type PlayerState, type TableConfig, BettingStructure, type Card } from '../types.js';
 import { bestPLOHighHand } from '../evaluator.js';
 
 /**

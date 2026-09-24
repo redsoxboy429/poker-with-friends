@@ -1,5 +1,5 @@
 import { BaseDrawGame } from './draw-base.js';
-import { PlayerState, TableConfig, BettingStructure, HandResult, Card } from '../types.js';
+import { type PlayerState, type TableConfig, BettingStructure, type HandResult, type Card } from '../types.js';
 import { evaluateBadugi } from '../evaluator.js';
 
 /**

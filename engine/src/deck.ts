@@ -5,7 +5,7 @@
 // Works in both Node.js and browser (Web Crypto API).
 // No Math.random() anywhere in this codebase.
 
-import { Card, Rank, Suit, cardToString } from './types.js';
+import { type Card, Rank, Suit, cardToString } from './types.js';
 
 /**
  * Get cryptographically secure random bytes.
@@ -16,11 +16,8 @@ function getRandomBytes(count: number): Uint8Array {
   if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
     globalThis.crypto.getRandomValues(buf);
   } else {
-    // Fallback for older Node.js
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { randomBytes } = require('crypto');
-    const nodeBuf = randomBytes(count);
-    buf.set(nodeBuf);
+    // Never fall back to a weaker source: every supported runtime (Node 22, browsers) has Web Crypto.
+    throw new Error('Secure random source (Web Crypto) is unavailable');
   }
   return buf;
 }

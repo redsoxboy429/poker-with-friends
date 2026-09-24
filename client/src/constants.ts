@@ -7,7 +7,6 @@ import {
   GameVariant,
   GamePhase,
   ActionType,
-  BettingStructure,
   GameMode,
 } from './engine-wrapper';
 

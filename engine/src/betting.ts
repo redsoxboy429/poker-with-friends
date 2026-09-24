@@ -6,9 +6,9 @@
 
 import {
   BettingStructure,
-  PlayerState,
-  AvailableActions,
-  HandState,
+  type PlayerState,
+  type AvailableActions,
+  type HandState,
   GamePhase,
   CHIP_UNIT,
 } from './types.js';
@@ -247,7 +247,7 @@ function countBetsThisRound(state: HandState): number {
 // Pot Management
 // ============================================================
 
-import { Pot } from './types.js';
+import { type Pot } from './types.js';
 
 /**
  * Collect bets from all players and create/update pots.

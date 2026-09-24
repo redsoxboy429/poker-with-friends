@@ -12,7 +12,7 @@
 // For LOW hands: lower = better.
 //   Score encodes ranks highest-to-lowest; lower ranks = lower score.
 
-import { Card, Rank, Suit, HandCategory, HandResult, LowHandResult, cardToString } from './types.js';
+import { type Card, Rank, HandCategory, type HandResult, type LowHandResult } from './types.js';
 
 // ============================================================
 // Utility: combinations
@@ -105,19 +105,6 @@ function encodeKickers(ranks: number[]): number {
   }
   return value;
 }
-
-/** Category descriptions */
-const CATEGORY_NAMES: Record<HandCategory, string> = {
-  [HandCategory.HighCard]: 'High Card',
-  [HandCategory.OnePair]: 'One Pair',
-  [HandCategory.TwoPair]: 'Two Pair',
-  [HandCategory.ThreeOfAKind]: 'Three of a Kind',
-  [HandCategory.Straight]: 'Straight',
-  [HandCategory.Flush]: 'Flush',
-  [HandCategory.FullHouse]: 'Full House',
-  [HandCategory.FourOfAKind]: 'Four of a Kind',
-  [HandCategory.StraightFlush]: 'Straight Flush',
-};
 
 const RANK_DISPLAY: Record<Rank, string> = {
   [Rank.Two]: 'Twos',

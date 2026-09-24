@@ -9,7 +9,7 @@
 // - Best hand: 2-3-4-5-7 unsuited
 
 import { BaseDrawGame } from './draw-base.js';
-import { PlayerState, TableConfig, GameVariant, BettingStructure, HandResult } from '../types.js';
+import { type PlayerState, type TableConfig, GameVariant, BettingStructure, type HandResult } from '../types.js';
 import { best27LowHand } from '../evaluator.js';
 
 /**

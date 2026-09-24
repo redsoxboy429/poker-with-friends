@@ -7,18 +7,17 @@
 
 import { Deck } from '../deck.js';
 import {
-  HandState,
-  PlayerState,
+  type HandState,
+  type PlayerState,
   GamePhase,
-  PlayerAction,
+  type PlayerAction,
   ActionType,
-  TableConfig,
-  Pot,
-  PotResult,
-  HandResult,
-  LowHandResult,
+  type TableConfig,
+  type Pot,
+  type HandResult,
+  type LowHandResult,
   BettingStructure,
-  AvailableActions,
+  type AvailableActions,
   CHIP_UNIT,
 } from '../types.js';
 import { getAvailableActions, collectBets, validateAction, getFixedLimitIncrement } from '../betting.js';
@@ -142,7 +141,7 @@ export abstract class BaseGame {
    * Override in subclasses to provide partial hand info before 5 cards.
    * Default: null (no partial hand display).
    */
-  protected getPartialHandDescription(player: PlayerState | undefined): { description: string; cards: import('../types.js').Card[] } | null {
+  protected getPartialHandDescription(_player: PlayerState | undefined): { description: string; cards: import('../types.js').Card[] } | null {
     return null;
   }
 
@@ -343,7 +342,7 @@ export abstract class BaseGame {
    * When this returns non-null for any player, resolveShowdown() will
    * automatically split each pot 50/50 between best high and best low.
    */
-  protected evaluateLowHand(player: PlayerState): LowHandResult | null {
+  protected evaluateLowHand(_player: PlayerState): LowHandResult | null {
     return null; // Default: no low hand (high-only game)
   }
 
