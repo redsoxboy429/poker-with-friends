@@ -33,7 +33,9 @@ The other 20 variants stay in the engine but can't be selected in the app or on 
 
 Rotation modes play **8 hands per game** [CONFIRMED 2026-09-23].
 
-**Button across game segments** [CONFIRMED 2026-09-23]. Each game segment (a rotation game or a dealer's-choice orbit) **starts with the button one seat to the left of where the previous segment started**. The button is **explicitly reset** at the start of each segment, because 8 hands with 5 players would otherwise leave it somewhere else. Within a segment the button moves one occupied seat per hand. Stud hands still advance an invisible button, so it's in the right place when a flop or draw game comes up. In dealer's choice, the segment starts with the button on the chooser.
+**Button in HORSE / 8-Game / 9-Game** [CONFIRMED 2026-09-23, revised]. In games with blinds (flop and draw games) the button moves one occupied seat every hand, **including across game changes**. In stud games the button **stands still**. When play returns to a blind game, the button passes to the left of wherever it stopped. Example (HORSE): whoever had the button on the last O8 hand keeps it through Razz, Stud and Stud8, then it passes to their left for the first hand of LHE.
+
+**Button in Dealer's Choice** [CONFIRMED 2026-09-23]. Each chosen game starts with the button on the chooser and runs one orbit plus one hand, so the chooser gets two buttons. The next game starts one seat to the left of the previous chooser, and that player chooses.
 
 ---
 
@@ -54,7 +56,7 @@ Ante and bring-in are **host-editable**. Their defaults follow the limits (¼ of
 
 - **Buy-in is entered in dollars** [CONFIRMED 2026-09-23], using one stack for the whole session. The host can edit the min and max. Defaults are 50–300 × the NL big blind ($25–$150 at .25/.50). Top-ups use the same max.
 - **Mixed-game caps** (chips in play for one hand; the rest stays behind and returns after the hand):
-  - NLH and PLO: 80 × BB
+  - NLH and PLO: 150 × BB (raised from 80 on 2026-09-23)
   - 2-7 SD: 30 × BB
   - These apply in HORSE, 8-Game, 9-Game and DC, not in Specific Game [CONFIRMED 2026-09-23].
 

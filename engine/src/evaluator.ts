@@ -197,7 +197,34 @@ export function evaluate5CardHigh(cards: Card[]): HandResult {
   const CATEGORY_MULTIPLIER = 10_000_000_000;
   const value = category * CATEGORY_MULTIPLIER + encodeKickers(kickers);
 
-  return { category, value, cards: sorted, description };
+  return { category, value, cards: sorted, description, showdownDescription: withKickers(category, description, kickers) };
+}
+
+/** Short rank for kicker lists: A, K, Q, J, 10, 9 … */
+function shortRank(rank: number): string {
+  return ({ 14: 'A', 13: 'K', 12: 'Q', 11: 'J' } as Record<number, string>)[rank] ?? String(rank);
+}
+
+/**
+ * Showdown text that settles ties between same-category hands, e.g.
+ * "Three Jacks, K-9 kickers" vs "Three Jacks, Q-9 kickers".
+ * `kickers` is the tiebreak order from evaluate5CardHigh.
+ */
+function withKickers(category: HandCategory, description: string, kickers: number[]): string {
+  switch (category) {
+    case HandCategory.FourOfAKind:
+    case HandCategory.TwoPair:
+      return `${description}, ${RANK_SINGLE[kickers[kickers.length - 1] as Rank]} kicker`;
+    case HandCategory.ThreeOfAKind:
+    case HandCategory.OnePair:
+      return `${description}, ${kickers.slice(1).map(shortRank).join('-')} kickers`;
+    case HandCategory.Flush:
+      return `Flush, ${kickers.map(shortRank).join('-')}`;
+    case HandCategory.HighCard:
+      return `${description}, ${kickers.slice(1).map(shortRank).join('-')}`;
+    default:
+      return description; // straights and full houses are fully described
+  }
 }
 
 // ============================================================

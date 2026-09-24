@@ -138,6 +138,25 @@ export abstract class BaseGame {
   }
 
   /**
+   * Showdown text: the regular description with the high hand's kickers, so two
+   * "Three Jacks" hands show which kicker won. Low halves are already fully spelled out.
+   */
+  getShowdownDescription(playerId: string): string | null {
+    const base = this.getHandDescription(playerId);
+    const player = this.state.players.find(p => p.id === playerId);
+    if (!base || !player) return base?.description ?? null;
+    try {
+      const high = this.evaluateHand(player);
+      if (high.showdownDescription && base.description.startsWith(high.description)) {
+        return high.showdownDescription + base.description.slice(high.description.length);
+      }
+    } catch {
+      // Not enough cards to evaluate
+    }
+    return base.description;
+  }
+
+  /**
    * Override in subclasses to provide partial hand info before 5 cards.
    * Default: null (no partial hand display).
    */
@@ -618,7 +637,7 @@ export abstract class BaseGame {
 
     for (let i = 0; i < winners.length; i++) {
       winners[i].player.chips += amounts[i];
-      addEntry(winners[i].player, amounts[i], winners[i].hand.description, 'scoop');
+      addEntry(winners[i].player, amounts[i], (winners[i].hand.showdownDescription ?? winners[i].hand.description), 'scoop');
     }
   }
 
@@ -646,7 +665,7 @@ export abstract class BaseGame {
       const amounts = this.divideAmongWinners(pot.amount, highWinners.map(e => e.player));
       for (let i = 0; i < highWinners.length; i++) {
         highWinners[i].player.chips += amounts[i];
-        addEntry(highWinners[i].player, amounts[i], highWinners[i].hand.description + ' (scoops)', 'scoop');
+        addEntry(highWinners[i].player, amounts[i], (highWinners[i].hand.showdownDescription ?? highWinners[i].hand.description) + ' (scoops)', 'scoop');
       }
       return;
     }
@@ -657,7 +676,7 @@ export abstract class BaseGame {
     const highAmounts = this.divideAmongWinners(highHalf, highWinners.map(e => e.player));
     for (let i = 0; i < highWinners.length; i++) {
       highWinners[i].player.chips += highAmounts[i];
-      addEntry(highWinners[i].player, highAmounts[i], highWinners[i].hand.description + ' (high)', 'high');
+      addEntry(highWinners[i].player, highAmounts[i], (highWinners[i].hand.showdownDescription ?? highWinners[i].hand.description) + ' (high)', 'high');
     }
 
     const bestLowValue = Math.min(...lowEval.map(e => e.hand.value));
@@ -705,7 +724,7 @@ export abstract class BaseGame {
       const amounts = this.divideAmongWinners(pot.amount, winners.map(e => e.player));
       for (let i = 0; i < winners.length; i++) {
         winners[i].player.chips += amounts[i];
-        addEntry(winners[i].player, amounts[i], winners[i].hand.description + ' (scoops)', 'scoop');
+        addEntry(winners[i].player, amounts[i], (winners[i].hand.showdownDescription ?? winners[i].hand.description) + ' (scoops)', 'scoop');
       }
     } else if (!hasHigh && hasLow) {
       // Low scoops
@@ -725,7 +744,7 @@ export abstract class BaseGame {
       const highAmounts = this.divideAmongWinners(highHalf, highWinners.map(e => e.player));
       for (let i = 0; i < highWinners.length; i++) {
         highWinners[i].player.chips += highAmounts[i];
-        addEntry(highWinners[i].player, highAmounts[i], highWinners[i].hand.description + ' (high)', 'high');
+        addEntry(highWinners[i].player, highAmounts[i], (highWinners[i].hand.showdownDescription ?? highWinners[i].hand.description) + ' (high)', 'high');
       }
 
       const bestLowVal = Math.min(...lowQualifiers.map(e => e.hand.value));

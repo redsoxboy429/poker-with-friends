@@ -41,9 +41,10 @@ export const HANDS_PER_VARIANT = 8;
 
 /** Bet cap rules (in big blinds) for mixed game modes */
 export const CAP_RULES: Partial<Record<GameVariant, number>> = {
-  [GameVariant.NLH]: 80,
-  [GameVariant.PLO]: 80,
-  [GameVariant.PLOHiLo]: 80,
+  // Mixed modes only (docs/NINE-GAME-RULES.md §2, confirmed 2026-09-23)
+  [GameVariant.NLH]: 150,
+  [GameVariant.PLO]: 150,
+  [GameVariant.PLOHiLo]: 150,
   [GameVariant.TwoSevenSD]: 30,
   // Drawmaha variants with PL option get 80 BB cap
   [GameVariant.DrawmahaHigh]: 80,

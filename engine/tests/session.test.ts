@@ -167,7 +167,7 @@ describe('GameSession — Specific Game', () => {
 // ============================================================
 
 describe('GameSession — Bet Caps', () => {
-  it('NLH gets 80 BB cap in 8-game', () => {
+  it('NLH gets 150 BB cap in 8-game', () => {
     const session = new GameSession({ mode: GameMode.EightGame, numPlayers: 4 });
 
     // Advance to NLH (game index 5, after 5*8=40 hands)
@@ -175,10 +175,10 @@ describe('GameSession — Bet Caps', () => {
       session.advanceHand(i % 4);
     }
     expect(session.getCurrentVariant()).toBe(GameVariant.NLH);
-    expect(session.getCapBB()).toBe(80);
+    expect(session.getCapBB()).toBe(150);
   });
 
-  it('PLO gets 80 BB cap in 8-game', () => {
+  it('PLO gets 150 BB cap in 8-game', () => {
     const session = new GameSession({ mode: GameMode.EightGame, numPlayers: 4 });
 
     // Advance to PLO (game index 6, after 6*8=48 hands)
@@ -186,7 +186,7 @@ describe('GameSession — Bet Caps', () => {
       session.advanceHand(i % 4);
     }
     expect(session.getCurrentVariant()).toBe(GameVariant.PLO);
-    expect(session.getCapBB()).toBe(80);
+    expect(session.getCapBB()).toBe(150);
   });
 
   it('27SD gets 30 BB cap in 9-game', () => {
@@ -212,18 +212,18 @@ describe('GameSession — Bet Caps', () => {
     expect(session.getCapBB()).toBeNull();
   });
 
-  it('PLO8 gets 80 BB cap in dealers choice', () => {
+  it('PLO8 gets 150 BB cap in dealers choice', () => {
     const session = new GameSession({ mode: GameMode.DealersChoice, numPlayers: 4 });
     session.initDealersChoice(0);
     session.setDealersChoice(GameVariant.PLOHiLo, 0);
-    expect(session.getCapBB()).toBe(80);
+    expect(session.getCapBB()).toBe(150);
   });
 
   it('caps reported correctly in state', () => {
     const session = new GameSession({ mode: GameMode.DealersChoice, numPlayers: 4 });
     session.initDealersChoice(0);
     session.setDealersChoice(GameVariant.NLH, 0);
-    expect(session.getState().capBB).toBe(80);
+    expect(session.getState().capBB).toBe(150);
   });
 });
 

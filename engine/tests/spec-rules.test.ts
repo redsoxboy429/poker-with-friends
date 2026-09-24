@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
   NLHGame, LHEGame, StudGame, StudHiLoGame, RazzGame, O8Game,
   GamePhase, ActionType, GameVariant, BettingStructure, CHIP_UNIT,
-  parseCards, createDeck, type PlayerState, type TableConfig, type BaseGame, type Card,
+  parseCards, createDeck, evaluate5CardHigh, planShowdown, type PlayerState, type TableConfig, type BaseGame, type Card,
 } from '../src/index.js';
 
 const players = (count: number, chips = 100): PlayerState[] => Array.from({ length: count }, (_, i) => ({
@@ -73,6 +73,32 @@ describe('Stud bring-in (spec §4)', () => {
     game.act('p1', ActionType.Bet, 0.5);
     expect(game.getState().actionHistory.at(-1)!.type).toBe(ActionType.BringIn);
     expect(game.getAvailableActions().minRaise).toBe(2);
+  });
+});
+
+describe('Showdown descriptions include kickers (Josh 2026-09-23)', () => {
+  const d = (cards: string) => evaluate5CardHigh(parseCards(cards)).showdownDescription;
+  it('names the kickers that decide same-category hands', () => {
+    expect(d('Jh Js Jd Kc 9s')).toBe('Three Jacks, K-9 kickers');
+    expect(d('Jh Js Jd Qc 9s')).toBe('Three Jacks, Q-9 kickers');
+    expect(d('Jh Js Ad Kc 9s')).toBe('Pair of Jacks, A-K-9 kickers');
+    expect(d('Kh Ks 9d 9c As')).toBe('Two Pair, Kings and Nines, Ace kicker');
+    expect(d('Ah Kh 9h 7h 4h')).toBe('Flush, A-K-9-7-4');
+    expect(d('Ah Kd 9h 7c 4s')).toBe('Ace-high, K-9-7-4');
+    expect(d('9h 8d 7h 6c 5s')).toBe('Straight, 9-high');
+  });
+});
+
+describe('Stud runout order (Josh 2026-09-23)', () => {
+  it('deals each runout street starting left of the button', () => {
+    const state = {
+      buttonIndex: 1,
+      communityCards: [],
+      players: ['p0', 'p1', 'p2'].map(id => ({ id, folded: false, sittingOut: false, holeCards: new Array(7).fill(null) })),
+      showdownStart: { communityCardCount: 0, holeCardCounts: { p0: 3, p1: 3, p2: 3 } },
+    };
+    const fourth = planShowdown(state).steps.filter(s => s.holeCardCount === 4).map(s => s.playerId);
+    expect(fourth).toEqual(['p2', 'p0', 'p1']);
   });
 });
 

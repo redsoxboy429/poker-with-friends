@@ -160,6 +160,8 @@ export interface ServerToClientEvents {
   'player-joined': (data: { playerName: string; seatIndex: number }) => void;
   'player-left': (data: { playerName: string; seatIndex: number }) => void;
   'dc-choose': () => void;
+  /** A dealer's-choice pick is pending: clear the last hand and show who is choosing */
+  'choice-pending': (data: { chooser: { name: string; seatIndex: number } | null }) => void;
   /** Kicked, or the room is gone: clear the stored reconnect token */
   'removed': (data: { reason: string; clearSeat: boolean }) => void;
   'countdown': (data: { seconds: number }) => void;

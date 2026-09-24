@@ -54,6 +54,8 @@ export interface GameCallbacks {
   broadcastRoomState(roomCode: string): void;
   /** A hand has settled: free the seats of players who left during it */
   onHandSettled?(roomCode: string): void;
+  /** Tell everyone who is choosing the next dealer's-choice game (null: nobody) */
+  broadcastChoicePending?(roomCode: string, chooser: { name: string; seatIndex: number } | null): void;
 }
 
 const DRAW_PHASES = new Set<string>([GamePhase.Drawing1, GamePhase.Drawing2, GamePhase.Drawing3, GamePhase.Drawing]);
@@ -121,6 +123,15 @@ export class GameController {
 
   // ---------------------------------------------------------------- hand start
 
+  /** Host's Deal Now: also lifts a host pause, so it never needs a separate resume. */
+  dealNow(): void {
+    if (this.hostPaused) {
+      this.hostPaused = false;
+      this.countdownPaused = false;
+    }
+    this.startHand();
+  }
+
   /** Start a new hand (host command or countdown expiry) */
   startHand(): void {
     if (this.hostPaused || this.presenting || this.pendingChooserSeat !== null || this.liveState()) {
@@ -152,6 +163,8 @@ export class GameController {
       this.pendingChooserSeat = plan.chooserSeat;
       this.callbacks.broadcastRoomState(this.room.code);
       this.broadcastSessionOnly();
+      // Everyone clears the last hand and sees who is choosing.
+      this.callbacks.broadcastChoicePending?.(this.room.code, chooser ? { name: chooser.name, seatIndex: chooser.seatIndex } : null);
       if (chooser) this.callbacks.sendDcChoose(chooser.socketId);
       return;
     }
@@ -334,6 +347,10 @@ export class GameController {
       const view = getPlayerView(state, this.viewerId(player));
       this.callbacks.sendHandComplete(player.socketId, this.lastCompletion.winners, view, this.lastCompletion.handDescriptions, this.lastCompletion.lastAction);
     }
+    if (this.pendingChooserSeat !== null) {
+      const chooser = this.getSeatPlayer(this.pendingChooserSeat);
+      this.callbacks.broadcastChoicePending?.(this.room.code, chooser ? { name: chooser.name, seatIndex: chooser.seatIndex } : null);
+    }
     if (this.pendingChooserSeat === player.seatIndex && !this.hostPaused) {
       this.callbacks.sendDcChoose(player.socketId);
     }
@@ -465,8 +482,9 @@ export class GameController {
       for (const enginePlayer of state.players) {
         if (enginePlayer.folded) continue;
         try {
-          const desc = this.game.getHandDescription(enginePlayer.id);
-          if (desc?.description) handDescriptions[enginePlayer.id] = desc.description;
+          // Showdown labels include kickers so tied categories show who won.
+          const desc = this.game.getShowdownDescription(enginePlayer.id);
+          if (desc) handDescriptions[enginePlayer.id] = desc;
         } catch {
           // Some games may not support hand descriptions
         }

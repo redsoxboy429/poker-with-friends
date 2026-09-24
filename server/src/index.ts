@@ -185,7 +185,7 @@ io.on('connection', (socket) => {
     if (!room) return;
     if (room.hostSocketId !== socket.id) throw new Error('Only the host can start hands');
     if (!room.gameController) room.gameController = new GameController(room, createCallbacks(room.code));
-    room.gameController.startHand();
+    room.gameController.dealNow();
   }));
 
   // ---- Player Action ----
@@ -341,6 +341,9 @@ function createCallbacks(roomCode: string) {
     broadcastRoomState(code: string) {
       const room = roomManager.getRoom(code);
       if (room) broadcastRoom(room);
+    },
+    broadcastChoicePending(code: string, chooser: { name: string; seatIndex: number } | null) {
+      io.to(code).emit('choice-pending', { chooser });
     },
     onHandSettled(code: string) {
       const room = roomManager.getRoom(code);

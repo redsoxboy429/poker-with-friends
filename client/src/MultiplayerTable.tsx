@@ -106,6 +106,9 @@ export default function MultiplayerTable() {
   const [log, setLog] = useState<string[]>(['Connected to room ' + (code || '???')]);
   const [selectedDiscardIndices, setSelectedDiscardIndices] = useState<Set<number>>(new Set());
   const [showdown, setShowdown] = useState(false);
+  /** Hand the showdown / card-deal animation belongs to, so neither can paint over a newer hand */
+  const [showdownHandId, setShowdownHandId] = useState<string | null>(null);
+  const [animHandId, setAnimHandId] = useState<string | null>(null);
   const [isRealShowdown, setIsRealShowdown] = useState(false);
   const [winInfo, setWinInfo] = useState<WinEntry[]>([]);
 
@@ -292,6 +295,7 @@ export default function MultiplayerTable() {
       setLastActions({}); setLastDrawActions({});
       addLog(`--- ${VARIANT_LABELS[curr.variant] || curr.variant} ---`);
       prevPhaseRef.current = curr.phase;
+      setAnimHandId(curr.id);
 
       // Animate initial hole card deal (FROM App.tsx lines 967-973)
       const noPrevCards: Record<string, number> = {};
@@ -411,6 +415,7 @@ export default function MultiplayerTable() {
       setIsAnimating(false);
       setIsAllInRunout(false);
       setShowdown(true);
+      setShowdownHandId(finalState.id);
       setIsRealShowdown(isReal);
       setWinInfo(socketState.winners!.map(w => ({
         playerId: w.playerId,
@@ -541,6 +546,19 @@ export default function MultiplayerTable() {
     : receivedState;
   const roomState = socketState.roomState;
   const myId = socketState.yourPlayerId;
+  // Dealer's choice between hands: the table is cleared while someone picks the game.
+  const awaitingChoice = !!socketState.choosingPlayer; // cleared by the next hand-state
+  const choosingName = socketState.choosingPlayer?.name ?? 'the dealer';
+  // The previous hand's showdown and dealt-card counts must never paint over a newly dealt hand.
+  const showdownNow = showdown && !!gameState && showdownHandId === gameState.id && !awaitingChoice;
+  const countsFresh = !!gameState && animHandId === gameState.id && !awaitingChoice;
+  const ss = socketState.sessionState;
+  const trackerText = ss && ss.mode !== 'specific' && ss.handsPerVariant > 0
+    ? (ss.mode === 'dealers-choice'
+        ? `Hand ${ss.handInVariant}/${ss.handsPerVariant}`
+        : `Hand ${ss.handInVariant}/${ss.handsPerVariant} \u2022 Game ${ss.rotationIndex + 1}/${ss.rotationLength}`)
+      + (ss.capBB ? ` \u2022 Cap ${ss.capBB}BB` : '')
+    : null;
 
   // ============================================================
   // Early returns — multiplayer-only screens
@@ -704,15 +722,7 @@ export default function MultiplayerTable() {
             </span>
           )}
           {/* Session tracker (DC / rotation info) */}
-          {socketState.sessionState && socketState.sessionState.mode !== 'specific' && socketState.sessionState.handsPerVariant > 0 && (
-            <span className="text-[10px] text-slate-500 font-mono">
-              {socketState.sessionState.mode === 'dealers-choice'
-                ? `Hand ${socketState.sessionState.handInVariant}/${socketState.sessionState.handsPerVariant}`
-                : `Hand ${socketState.sessionState.handInVariant}/${socketState.sessionState.handsPerVariant} \u2022 Game ${socketState.sessionState.rotationIndex + 1}/${socketState.sessionState.rotationLength}`
-              }
-              {socketState.sessionState.capBB && ` \u2022 Cap ${socketState.sessionState.capBB}BB`}
-            </span>
-          )}
+          {trackerText && <span className="text-[10px] text-slate-500 font-mono">{trackerText}</span>}
         </div>
         <div className="flex gap-1 items-center">
           {/* Sit Out / Sit In */}
@@ -736,7 +746,7 @@ export default function MultiplayerTable() {
           <button onClick={() => setShowTracker(v => !v)}
             className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-medium transition-colors">Tracker</button>
           {/* Leave: only visible between hands (showdown or no active hand) */}
-          {(showdown || !gameState) && (
+          {(showdownNow || awaitingChoice || !gameState) && (
             <button onClick={() => setShowCashOut(true)}
               className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold transition-colors">Leave</button>
           )}
@@ -895,12 +905,15 @@ export default function MultiplayerTable() {
 
           {/* Center content (FROM App.tsx lines 1411-1524) */}
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
-            {gameState && (
+            {gameState && !awaitingChoice && (
               <>
-                {/* Variant label on felt */}
-                <div className="text-xs font-semibold text-amber-300/80 tracking-wide mb-1">
+                {/* Variant label on felt, with the mixed-game tracker */}
+                <div className="text-xs font-semibold text-amber-300/80 tracking-wide mb-0.5">
                   {VARIANT_LABELS[gameState.variant] || gameState.variant}
                 </div>
+                {trackerText && (
+                  <div className="text-[10px] text-amber-100/60 font-mono mb-1">{trackerText}</div>
+                )}
 
                 {/* Phase indicator */}
                 <div className="text-[10px] text-green-300/50 font-mono uppercase tracking-widest mb-2">
@@ -922,7 +935,7 @@ export default function MultiplayerTable() {
                 )}
 
                 {/* Pot or Win Display (FROM App.tsx lines 1457-1490) */}
-                {showdown && winInfo.length > 0 ? (
+                {showdownNow && winInfo.length > 0 ? (
                   <>
                     <WinDisplay winInfo={winInfo} variant={gameState.variant} />
                     {/* Uncalled bets were returned, not won */}
@@ -955,9 +968,9 @@ export default function MultiplayerTable() {
               </>
             )}
 
-            {/* Waiting for DC pick (non-chooser) */}
-            {!gameState && !socketState.dcChoosing && (
-              <p className="text-sm text-slate-400">Waiting for dealer to choose the game...</p>
+            {/* Waiting for the dealer's-choice pick */}
+            {(!gameState || awaitingChoice) && !socketState.dcChoosing && (
+              <p className="text-sm text-slate-300">Waiting for <span className="font-semibold text-amber-300">{choosingName}</span> to choose the game...</p>
             )}
           </div>
 
@@ -966,13 +979,14 @@ export default function MultiplayerTable() {
             <PlayerSeat
               key={player.id}
               player={awayIds.has(player.id) ? { ...player, name: `${player.name} (away)` } : player}
-              isActive={i === rotatedActiveIndex && !showdown}
+              isActive={i === rotatedActiveIndex && !showdownNow && !awaitingChoice}
               isDealer={i === rotatedButtonIndex}
               isHuman={player.id === myId}
               showCards={
-                (isRealShowdown && !player.folded && showdown) ||
-                player.id === myId ||
-                (isAllInRunout && !player.folded)
+                !awaitingChoice && (
+                  (isRealShowdown && !player.folded && showdownNow) ||
+                  player.id === myId ||
+                  (isAllInRunout && !player.folded))
               }
               position={positions[i]}
               isTop={positions[i][1] < 50}
@@ -980,16 +994,16 @@ export default function MultiplayerTable() {
               selectedDiscardIndices={selectedDiscardIndices}
               isDrawing={isDrawPhase === true && player.id === myId}
               dealtCardCount={
-                showdown
+                showdownNow
                   ? (player.folded ? 0 : player.holeCards.length)
-                  : (dealtCardCounts[player.id] ?? 0)
+                  : countsFresh ? (dealtCardCounts[player.id] ?? 0) : 0
               }
-              lastAction={lastActions[player.id]}
-              lastDrawAction={lastDrawActions[player.id]}
+              lastAction={awaitingChoice ? undefined : lastActions[player.id]}
+              lastDrawAction={awaitingChoice ? undefined : lastDrawActions[player.id]}
               forceAllDown={studForceDown}
               chipsBehind={socketState.chipsBehind?.[player.id]}
               handDescription={
-                showdown && isRealShowdown && !player.folded && socketState.handDescriptions
+                showdownNow && isRealShowdown && !player.folded && socketState.handDescriptions
                   ? socketState.handDescriptions[player.id]
                   : undefined
               }
@@ -997,14 +1011,25 @@ export default function MultiplayerTable() {
           ))}
 
           {/* Bet chips (FROM App.tsx lines 1563-1574, with rotation) */}
-          {gameState && !showdown && rotatedPlayers.map((player, i) =>
+          {/* Dealer button on the felt, beside the button seat */}
+          {gameState && !awaitingChoice && rotatedButtonIndex >= 0 && positions[rotatedButtonIndex] && (() => {
+            const pos = positions[rotatedButtonIndex];
+            const x = 50 + (pos[0] - 50) * 0.62 + (pos[0] >= 50 ? -5 : 5);
+            const y = 50 + (pos[1] - 50) * 0.62;
+            return (
+              <div className="absolute -translate-x-1/2 -translate-y-1/2 z-[6] w-6 h-6 rounded-full bg-yellow-300 text-black text-[11px] font-bold flex items-center justify-center shadow-md border-2 border-yellow-100"
+                style={{ left: `${x}%`, top: `${y}%` }} title="Dealer button">D</div>
+            );
+          })()}
+
+          {gameState && !showdownNow && !awaitingChoice && rotatedPlayers.map((player, i) =>
             player.bet > 0 ? (
               <BetChip key={`bet-${player.id}`} amount={player.bet} position={betPositions[i]} />
             ) : null
           )}
 
           {/* Win chips (FROM App.tsx lines 1576-1609, with rotation) */}
-          {gameState && showdown && winInfo.map((w, idx) => {
+          {gameState && showdownNow && winInfo.map((w, idx) => {
             const playerIdx = rotatedPlayers.findIndex(p => p.id === w.playerId);
             if (playerIdx === -1) return null;
             const seatPos = positions[playerIdx];
@@ -1052,7 +1077,7 @@ export default function MultiplayerTable() {
       )}
 
       {/* ======== Hand Ranking (FROM App.tsx lines 1620-1627) ======== */}
-      {socketState.handDescription && gameState && !showdown && !isAllInRunout && (
+      {socketState.handDescription && gameState && !showdownNow && !awaitingChoice && !isAllInRunout && (
         <div className="flex-shrink-0 flex justify-center px-4 py-0.5">
           <span className="text-[11px] font-semibold text-amber-400/80 tracking-wide">
             {socketState.handDescription}
@@ -1085,8 +1110,14 @@ export default function MultiplayerTable() {
             bettingStructure={gameState.bettingStructure}
             phase={gameState.phase}
             minChip={0.25}
+            pot={potTotal}
+            currentBet={gameState.currentBet}
           />
-        ) : showdown ? (
+        ) : awaitingChoice ? (
+          <div className="text-center text-slate-400 text-xs py-2">
+            {socketState.dcChoosing ? 'Your pick: choose the game' : <>Waiting for <span className="text-amber-300 font-semibold">{choosingName}</span> to choose the game</>}
+          </div>
+        ) : showdownNow ? (
           <div className="flex flex-col items-center gap-2">
             {/* Countdown display — only after showdown declared (FROM App.tsx lines 1658-1663) */}
             {socketState.countdown !== null && socketState.countdown > 0 && (

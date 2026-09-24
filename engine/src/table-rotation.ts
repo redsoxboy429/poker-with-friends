@@ -5,11 +5,13 @@
 // never by position in a compacted list of active players, so empty and
 // sitting-out seats cannot shift the button or the chooser.
 //
-// A "segment" is one game in a rotation mode (HANDS_PER_VARIANT hands) or one
-// dealer's-choice orbit (the chooser gets two buttons). Every segment starts
-// with the button one occupied seat left of where the previous segment started
-// (docs/NINE-GAME-RULES.md §1). Within a segment the button moves one occupied
-// seat per hand, including during stud, where it is invisible.
+// Rotation modes (HORSE / 8-game / 9-game): each game plays HANDS_PER_VARIANT
+// hands. The button moves one occupied seat per hand in blind games, straight
+// through game changes, and stands still during stud (docs/NINE-GAME-RULES.md §1).
+//
+// Dealer's choice: each chosen game is a "segment" of one orbit plus one hand
+// (the chooser gets two buttons). Each segment starts with the button one
+// occupied seat left of where the previous segment started.
 //
 // Planning is separate from committing: nextHand() can be called again (for
 // example after a chooser leaves before picking) and only completeHand()
@@ -55,6 +57,9 @@ export interface TableRotationOptions {
    */
   startAfterSeat?: number | null;
 }
+
+/** Stud games have no blinds, so the button stands still during them in rotation modes */
+const STUD_VARIANTS = new Set<GameVariant>([GameVariant.Razz, GameVariant.Stud, GameVariant.StudHiLo]);
 
 interface Committed {
   lastButtonSeat: number | null;
@@ -124,6 +129,31 @@ export class TableRotation {
     let buttonSeat: number;
     let newSegment = false;
 
+    if (this.rotation.length > 0) {
+      // HORSE / 8-game / 9-game (spec §1): 8 hands per game. In blind games the
+      // button moves one occupied seat every hand, straight through game
+      // changes. In stud games it stays put, and the next blind game passes it
+      // to the left of wherever it stopped.
+      if (c.lastButtonSeat !== null && c.handsInSegment >= HANDS_PER_VARIANT) {
+        next.rotationIndex = (c.rotationIndex + 1) % this.rotation.length;
+        next.handsInSegment = 0;
+        newSegment = true;
+      }
+      const variant = this.rotation[next.rotationIndex];
+      if (c.lastButtonSeat === null) {
+        buttonSeat = this.startAfterSeat === null ? occupied[0] : this.nextSeat(occupied, this.startAfterSeat);
+        newSegment = true;
+      } else if (STUD_VARIANTS.has(variant)) {
+        buttonSeat = occupied.includes(c.lastButtonSeat) ? c.lastButtonSeat : this.nextSeat(occupied, c.lastButtonSeat);
+      } else {
+        buttonSeat = this.nextSeat(occupied, c.lastButtonSeat);
+      }
+      next.lastButtonSeat = buttonSeat;
+      next.handsInSegment += 1;
+      this.plan = { buttonSeat, variant, chooserSeat: null, needsChoice: false, newSegment, next };
+      return this.publicPlan()!;
+    }
+
     if (c.lastButtonSeat === null) {
       buttonSeat = this.startAfterSeat === null ? occupied[0] : this.nextSeat(occupied, this.startAfterSeat);
       newSegment = true;
@@ -132,15 +162,11 @@ export class TableRotation {
       const start = c.segmentStartSeat!;
       // Dealer's choice ends after the chooser's second button. If the chooser
       // has left, it ends when the button passes their empty seat instead.
-      const segmentOver =
-        this.rotation.length > 0 ? c.handsInSegment >= HANDS_PER_VARIANT
-        : this.mode === GameMode.DealersChoice
-          ? c.chooserPasses >= 2 || (!occupied.includes(start) && this.crosses(c.lastButtonSeat, candidate, start))
-          : false;
+      const segmentOver = this.mode === GameMode.DealersChoice
+        && (c.chooserPasses >= 2 || (!occupied.includes(start) && this.crosses(c.lastButtonSeat, candidate, start)));
       if (segmentOver) {
         buttonSeat = this.nextSeat(occupied, c.segmentStartSeat!);
         newSegment = true;
-        if (this.rotation.length > 0) next.rotationIndex = (c.rotationIndex + 1) % this.rotation.length;
       } else {
         buttonSeat = candidate;
         if (this.mode === GameMode.DealersChoice && this.crosses(c.lastButtonSeat, candidate, start)) {
@@ -159,7 +185,7 @@ export class TableRotation {
     next.handsInSegment += 1;
 
     const isDC = this.mode === GameMode.DealersChoice;
-    const variant = this.specificVariant ?? (isDC ? next.chosenVariant : this.rotation[next.rotationIndex]);
+    const variant = this.specificVariant ?? next.chosenVariant;
     this.plan = {
       buttonSeat,
       variant,

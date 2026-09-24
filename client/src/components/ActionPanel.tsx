@@ -16,12 +16,18 @@ export function ActionPanel({
   bettingStructure,
   phase,
   minChip,
+  pot,
+  currentBet,
 }: {
   actions: AvailableActions;
   onAction: (type: ActionType, amount?: number) => void;
   bettingStructure: string;
   phase?: string;
   minChip: number;
+  /** Total pot including bets on the table (enables the pot-fraction buttons) */
+  pot?: number;
+  /** Highest bet this round (raise-to sizing) */
+  currentBet?: number;
 }) {
   const betLabel = phase === GamePhase.BettingPreflop ? 'Raise' : 'Bet';
   const isPotLimit = bettingStructure === BettingStructure.PotLimit;
@@ -73,6 +79,17 @@ export function ActionPanel({
 
   const btnBase = 'px-6 py-3 rounded-lg font-bold text-base transition-all active:scale-95 shadow-md text-center';
 
+  // Pot-fraction sizing. PLO's "Pot" is already the max button, so only NL adds one.
+  const potFractions: [number, string][] = [[1 / 3, '33%'], [2 / 3, '67%'], ...(isNoLimit ? [[1, 'Pot'] as [number, string]] : [])];
+  /** Bet: fraction × pot. Raise: raise to the current bet + fraction × (pot after calling). Whole chips, within limits. */
+  const potSize = (fraction: number, min: number, max: number) => {
+    const p = pot ?? 0;
+    const raw = actions.canRaise && !actions.canBet
+      ? (currentBet ?? 0) + fraction * (p + actions.callAmount)
+      : fraction * p;
+    return Math.min(max, Math.max(min, Math.round(raw / minChip) * minChip));
+  };
+
   const sizingControls = (min: number, max: number, accentClass: string) => (
     <>
       <input type="range" min={min} max={max} step={minChip} value={raiseAmount}
@@ -84,6 +101,11 @@ export function ActionPanel({
         onBlur={handleInputBlur} onKeyDown={handleKeyDown}
         className="w-20 px-3 py-2 rounded bg-slate-700 text-white text-base text-center font-semibold border border-slate-500 focus:border-blue-400 focus:outline-none"
       />
+      {pot !== undefined && potFractions.map(([fraction, label]) => (
+        <button key={label} onClick={() => handleSlider(potSize(fraction, min, max))}
+          className="px-2.5 py-2 rounded-lg font-bold text-xs bg-slate-600 hover:bg-slate-500 text-white active:scale-95 transition-all"
+        >{label}</button>
+      ))}
       {maxLabel && (
         <button onClick={() => handleSlider(max)}
           className="px-3 py-2 rounded-lg font-bold text-sm bg-amber-700 hover:bg-amber-600 text-white active:scale-95 transition-all"

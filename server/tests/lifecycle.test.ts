@@ -208,6 +208,67 @@ describe('audit regressions (2026-09-23)', () => {
   });
 });
 
+describe('Josh test-session feedback (2026-09-23)', () => {
+  const DC = { ...NL, gameMode: GameMode.DealersChoice, variant: undefined };
+
+  it('Deal Now deals even while the host has paused the table', () => {
+    const { controller } = table(2);
+    controller.pauseCountdown();
+    controller.dealNow();
+    expect(controller.getState()?.phase).not.toBe(GamePhase.Complete);
+    expect(controller.isPaused()).toBe(false);
+  });
+
+  it('caps NLH at 150 BB in dealer\'s choice, with the rest behind, but not in a single game', () => {
+    const dc = table(2, DC, 100);
+    dc.controller.startHand();
+    dc.controller.handleVariantPick('p0', GameVariant.NLH);
+    const capped = dc.controller.getState()!;
+    const committed = (id: string) => { const p = capped.players.find(q => q.id === id)!; return p.chips + p.totalBet; };
+    expect(committed('p0')).toBe(75); // 150 × $0.50
+    const behind = (dc.callbacks.sendHandState as ReturnType<typeof vi.fn>).mock.calls.at(-1)![7];
+    expect(behind).toEqual({ p0: 25, p1: 25 });
+
+    const single = table(2, NL, 100);
+    single.controller.startHand();
+    const s = single.controller.getState()!;
+    expect(s.players[0].chips + s.players[0].totalBet).toBe(100);
+  });
+
+  it('8-game: stud freezes the button, then NLH passes it left and caps stacks at 150 BB', () => {
+    const { controller, callbacks } = table(2, { ...NL, gameMode: GameMode.EightGame, variant: undefined }, 150);
+    controller.startHand();
+    const seen: { variant: string; button: number; committed: number[] }[] = [];
+    for (let h = 0; h < 41; h++) {
+      const st = controller.getState()!;
+      seen.push({ variant: st.variant, button: st.players[st.buttonIndex].seatIndex, committed: st.players.map(p => p.chips + p.totalBet) });
+      while (controller.getState()!.phase !== GamePhase.Complete) {
+        const s = controller.getState()!;
+        const a = controller['game']!.getAvailableActions();
+        const sock = `s${s.players[s.activePlayerIndex].seatIndex}`;
+        if (s.pendingBringIn) controller.handleAction(sock, ActionType.Bet, a.minBet);
+        else controller.handleAction(sock, a.canFold ? ActionType.Fold : ActionType.Check);
+      }
+      vi.advanceTimersByTime(40_000); // result + countdown, then the next hand deals itself
+    }
+    const stud = seen.slice(16, 40);
+    expect(new Set(stud.map(h => h.button)).size).toBe(1); // frozen through R, S, E
+    expect(seen[40].variant).toBe(GameVariant.NLH);
+    expect(seen[40].button).not.toBe(stud[0].button); // passed to the left
+    expect(seen[40].committed).toEqual([75, 75]); // 150 × $0.50 in play
+    const behind = (callbacks.sendHandState as ReturnType<typeof vi.fn>).mock.calls.at(-1)![7] as Record<string, number>;
+    expect(Object.values(behind).reduce((a, b) => a + b, 0) + 150).toBe(300);
+  });
+
+  it('tells everyone who is choosing the next dealer\'s-choice game', () => {
+    const { controller, callbacks } = table(2, DC);
+    const pending = vi.fn();
+    callbacks.broadcastChoicePending = pending;
+    controller.startHand();
+    expect(pending).toHaveBeenCalledWith(expect.any(String), { name: 'P0', seatIndex: 0 });
+  });
+});
+
 describe('leaving during a hand (§7)', () => {
   it('keeps the seat until the hand settles, folds on their turn, then cashes out', () => {
     const { rm, room, controller } = table(3);

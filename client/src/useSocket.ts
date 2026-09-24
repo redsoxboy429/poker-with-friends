@@ -48,6 +48,8 @@ export interface SocketState {
   handDescriptions: Record<string, string> | null;
   sessionState: { mode: string; handInVariant: number; handsPerVariant: number; rotationIndex: number; rotationLength: number; currentVariant: string | null; chooserSeatIndex: number | null; needsChoice?: boolean; capBB: number | null; buttonSeat?: number | null } | null;
   chipsBehind: Record<string, number> | null;
+  /** Dealer's choice: who is picking the next game (the last hand is cleared meanwhile) */
+  choosingPlayer: { name: string; seatIndex: number } | null;
 }
 
 export interface SocketActions {
@@ -98,6 +100,7 @@ const INITIAL_STATE: SocketState = {
   handDescriptions: null,
   sessionState: null,
   chipsBehind: null,
+  choosingPlayer: null,
 };
 
 type SocketAction =
@@ -108,6 +111,7 @@ type SocketAction =
   | { type: 'HAND_STATE'; handState: PlayerView; availableActions: AvailableActions | null; isYourTurn: boolean; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number }; handDescription?: string; sessionState?: SocketState['sessionState']; chipsBehind?: Record<string, number> }
   | { type: 'HAND_COMPLETE'; winners: WinnerInfo[]; finalState: PlayerView; handDescriptions: Record<string, string>; lastAction?: { playerId: string; type: string; amount?: number; discardCount?: number } }
   | { type: 'DC_CHOOSE' }
+  | { type: 'CHOICE_PENDING'; chooser: { name: string; seatIndex: number } | null }
   | { type: 'DC_PICKED' }
   | { type: 'COUNTDOWN'; seconds: number }
   | { type: 'ERROR'; message: string }
@@ -143,6 +147,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         handDescription: action.handDescription ?? null,
         sessionState: action.sessionState ?? state.sessionState,
         chipsBehind: action.chipsBehind ?? null,
+        choosingPlayer: null, // a hand is being dealt, so no choice is pending
         ...(clearWinners ? { winners: null, finalState: null, handDescriptions: null, countdown: null } : {}),
       };
     }
@@ -161,6 +166,9 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
 
     case 'DC_CHOOSE':
       return { ...state, dcChoosing: true };
+
+    case 'CHOICE_PENDING':
+      return { ...state, choosingPlayer: action.chooser ?? { name: 'the dealer', seatIndex: -1 } };
 
     case 'DC_PICKED':
       return { ...state, dcChoosing: false };
@@ -189,6 +197,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         handDescriptions: null,
         sessionState: null,
         chipsBehind: null,
+        choosingPlayer: null,
       };
 
     case 'LEAVE_ROOM':
@@ -319,6 +328,10 @@ function useSocketInternal(): SocketContextValue {
 
     socket.on('dc-choose', () => {
       dispatch({ type: 'DC_CHOOSE' });
+    });
+
+    socket.on('choice-pending', (data) => {
+      dispatch({ type: 'CHOICE_PENDING', chooser: data.chooser });
     });
 
     socket.on('game-stopped', () => {

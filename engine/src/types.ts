@@ -57,6 +57,8 @@ export interface HandResult {
   value: number;
   cards: Card[];
   description: string;
+  /** High hands: the description plus the kickers that break ties, for showdown display */
+  showdownDescription?: string;
 }
 
 /** Low hand result (for Razz, etc.) */

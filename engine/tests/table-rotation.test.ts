@@ -23,32 +23,39 @@ describe('TableRotation — rotation modes', () => {
     expect(hands.every(h => h.variant === GameVariant.LimitHoldem)).toBe(true);
   });
 
-  it('the next game resets the button one seat left of where the previous game started (5 players, 8 hands)', () => {
+  it('in blind games the button keeps moving one seat every hand, straight through a game change', () => {
     const rot = new TableRotation({ mode: GameMode.NineGame });
-    const seats = [0, 1, 2, 3, 4];
-    const hands = play(rot, seats, 3 * HANDS_PER_VARIANT);
-    // Game 1 starts at seat 0 and would finish with the button at seat 2 (8 hands over 5 seats).
-    expect(hands[7].button).toBe(2);
-    // Game 2 is explicitly reset to seat 1, not the natural next seat 3.
-    expect(hands[8]).toMatchObject({ button: 1, variant: NINE_GAME_ROTATION[1] });
-    // Game 3 starts at seat 2.
-    expect(hands[16]).toMatchObject({ button: 2, variant: NINE_GAME_ROTATION[2] });
+    const hands = play(rot, [0, 1, 2], 2 * HANDS_PER_VARIANT);
+    // LHE then O8 (both blind games), 3 players: never a repeat at the switch.
+    expect(hands.map(h => h.button)).toEqual([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0]);
+    expect(hands[8].variant).toBe(NINE_GAME_ROTATION[1]);
   });
 
   it('skips empty and sitting-out seats by physical seat number', () => {
     const rot = new TableRotation({ mode: GameMode.Horse });
     const hands = play(rot, [0, 2, 5], 9);
-    expect(hands.slice(0, 8).map(h => h.button)).toEqual([0, 2, 5, 0, 2, 5, 0, 2]);
-    expect(hands[8].button).toBe(2); // next game starts left of seat 0
+    expect(hands.map(h => h.button)).toEqual([0, 2, 5, 0, 2, 5, 0, 2, 5]);
   });
 
-  it('stud hands still advance the (invisible) button', () => {
+  it('the button stands still through stud, then the next blind game passes it left', () => {
     const rot = new TableRotation({ mode: GameMode.Horse });
-    const hands = play(rot, [0, 1, 2, 3], 3 * HANDS_PER_VARIANT);
-    // Razz (game 3) still moves the button every hand, and starts at seat 2.
-    const razz = hands.slice(16, 24);
-    expect(razz.every(h => h.variant === GameVariant.Razz)).toBe(true);
-    expect(razz.map(h => h.button)).toEqual([2, 3, 0, 1, 2, 3, 0, 1]);
+    const hands = play(rot, [0, 1, 2, 3], 5 * HANDS_PER_VARIANT + 1);
+    // H and O: moving every hand; O's last hand has the button on seat 3.
+    expect(hands[15]).toMatchObject({ button: 3, variant: GameVariant.OmahaHiLo });
+    // R, S, E (24 stud hands): frozen on seat 3.
+    const stud = hands.slice(16, 40);
+    expect(stud.every(h => h.button === 3)).toBe(true);
+    expect(new Set(stud.map(h => h.variant))).toEqual(new Set([GameVariant.Razz, GameVariant.Stud, GameVariant.StudHiLo]));
+    // Back to H: the button passes to the left of seat 3.
+    expect(hands[40]).toMatchObject({ button: 0, variant: GameVariant.LimitHoldem });
+  });
+
+  it('a frozen stud button whose seat empties moves to the next occupied seat', () => {
+    const rot = new TableRotation({ mode: GameMode.Horse });
+    // Seat 3 holds the button at the end of O8, then leaves during stud.
+    const hands = play(rot, i => (i < 17 ? [0, 1, 2, 3] : [0, 1, 2]), 18);
+    expect(hands[16].button).toBe(3);
+    expect(hands[17].button).toBe(0);
   });
 
   it('wraps the rotation after the last game', () => {
@@ -130,10 +137,10 @@ describe('TableRotation — specific game and caps', () => {
     expect(rot.getCapBB(GameVariant.NLH)).toBeNull();
   });
 
-  it('mixed modes cap NLH/PLO at 80 BB and 2-7 SD at 30 BB', () => {
+  it('mixed modes cap NLH/PLO at 150 BB and 2-7 SD at 30 BB', () => {
     const rot = new TableRotation({ mode: GameMode.NineGame });
-    expect(rot.getCapBB(GameVariant.NLH)).toBe(80);
-    expect(rot.getCapBB(GameVariant.PLO)).toBe(80);
+    expect(rot.getCapBB(GameVariant.NLH)).toBe(150);
+    expect(rot.getCapBB(GameVariant.PLO)).toBe(150);
     expect(rot.getCapBB(GameVariant.TwoSevenSD)).toBe(30);
     expect(rot.getCapBB(GameVariant.LimitHoldem)).toBeNull();
   });

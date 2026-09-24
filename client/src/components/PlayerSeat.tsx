@@ -103,7 +103,7 @@ export function PlayerSeat({
       <span className="text-[10px] font-mono opacity-70">
         {player.chips}
         {chipsBehind && chipsBehind > 0 ? (
-          <span className="text-slate-500 ml-0.5">({player.chips + chipsBehind})</span>
+          <span className="text-slate-400 ml-1" title="Mixed-game cap: chips behind return after the hand">+{chipsBehind} behind</span>
         ) : null}
       </span>
     </div>
