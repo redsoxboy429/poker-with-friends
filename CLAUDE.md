@@ -7,7 +7,8 @@
 2. Check the vault (`vault/josh-profile.md`, `vault/build-philosophy.md`, `vault/working-protocols.md`) at session start.
 
 **Testing rules:**
-- Do NOT test visuals yourself. Only Josh tests visuals. Claude reviews code, runs automated tests (`npm test --workspace=engine`), and audits logic.
+- Do NOT test visuals yourself. Only Josh tests visuals. Claude reviews code, runs automated tests, and audits logic.
+- The release gate is `npm run check` (client typecheck + lint, engine/server/client tests, builds, socket smoke test). Josh's machine runs hot: keep test workers capped (the test scripts use 2 forks) and run single test files while iterating instead of repeating the full suite.
 - Always ask Josh for clarification on poker rules rather than assume.
 
 ## What This Is
@@ -33,7 +34,7 @@ poker/
 │   │       ├── stud-base.ts   # BaseStudGame (antes, bring-in, up/down cards, 3rd-7th)
 │   │       ├── draw-base.ts   # BaseDrawGame (blinds, multi-round draw, discard/replace)
 │   │       └── [variant].ts   # 29 concrete game classes
-│   ├── tests/         # 399 tests across 16 files
+│   ├── tests/         # 463 tests (spec-rules.test.ts = nine-game rules from the spec)
 │   └── package.json
 ├── client/            # React table UI (Pokernow-style)
 │   ├── src/
@@ -49,7 +50,7 @@ poker/
     │   ├── index.ts           # Express + Socket.io entry point
     │   ├── room-manager.ts    # Room create/join/leave, 4-char codes
     │   └── game-controller.ts # Engine wrapper, action validation, state broadcast
-    ├── tests/         # 21 tests (state filter + room manager)
+    ├── tests/         # 68 tests + socket-smoke.mjs (lifecycle, reconnect, ledger, privacy)
     └── package.json
 ```
 
@@ -80,7 +81,9 @@ Adding a new variant: ~20-30 lines (constructor + evaluateHand override + factor
 - React + Vite + Tailwind (client), Socket.io (multiplayer), Express (server)
 - No external dependencies for core engine (crypto is built-in)
 
-## 29 Playable Variants
+## Variants: 9 selectable (nine-game), 29 in the engine
+
+Selectable in the app and accepted by the server: the WSOP nine-game mix — LHE, O8, Razz, Stud, Stud8, NLH, PLO, 2-7 Triple Draw, NL 2-7 Single Draw. The rest stay in the engine, unselectable. Full list of engine variants:
 
 **Flop:** NLH, LHE, PLO, O8 (Limit), PLO8, Limit Omaha High
 **Stud:** Razz, 7-Card Stud, Stud Hi-Lo
@@ -90,26 +93,13 @@ Adding a new variant: ~20-30 lines (constructor + evaluateHand override + factor
 
 ## Current Status
 
-**Phase 3 — WebSocket Multiplayer (IN PROGRESS)**
+**Nine-game stabilization — built and audited on branch `codex/nine-game-stabilization`, awaiting Josh's multi-device test** (as of 2026-09-23). Not yet pushed; Railway (`poker-with-friends-production.up.railway.app`) still runs the old `main`.
 
-**Deployed to Railway:** `poker-with-friends-production.up.railway.app` (custom Dockerfile, combined server+client). **Session 3 in progress — full feature port from local practice mode to multiplayer table.**
+- Rules: `docs/NINE-GAME-RULES.md` (signed off by Josh; tests are written from it, not from the code).
+- Progress and known limits: `reviews/2026-09-23/CLAUDE-CHECKPOINT.md`. Codex's original review: `reviews/2026-09-17/`.
+- Josh's test script: `docs/TEST-SESSION.md`. Next: fix what that session finds, then push/merge with Josh's approval.
 
-Session 3 completed:
-- All App.tsx features ported to MultiplayerTable.tsx (animations, action badges, hand descriptions, add-on/cashout modals, session ledger, pause/resume countdown)
-- Server enriched: lastAction + handDescription in hand-state, handDescriptions in hand-complete, add-on handler, pause/resume countdown
-- Seat rotation (you're always at bottom of your own screen)
-- Direct room link join (name prompt instead of white screen)
-- useSocket.ts refactored to useReducer (performance)
-- Default limits: .25/.50 blinds, 2/4 limits
-- Sit out / sit in button (header toggle)
-- Kick player (host only, lobby + mid-hand)
-- Change game mode mid-session (host menu: DC, HORSE, 8-Game, 9-Game, Specific)
-- DC / mixed game tracker (hand count, rotation position, cap info in header)
-- Reconnect handling already implemented (60s grace period, auto-rejoin by name)
-
-**Next: Josh doing thorough multi-device testing. Then Session 4 security audit. Sound deferred.**
-
-See `ROADMAP.md` for full roadmap and all completed milestones.
+See `ROADMAP.md` for the longer roadmap and older milestones.
 
 ## Key Rules to Get Right
 - **PLO must-use-2 rule:** Player MUST use exactly 2 of their 4 hole cards.
