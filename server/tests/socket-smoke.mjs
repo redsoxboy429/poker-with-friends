@@ -32,9 +32,13 @@ try {
     gameMode: 'specific', variant: 'nlh', smallBlind: 1, bigBlind: 2, smallBet: 2, bigBet: 4, startingChips: 100,
   } });
   const { roomCode } = await response;
-  response = event(peer, 'room-joined'); peer.emit('join-room', { roomCode, playerName: 'Peer' }); await response;
+  response = event(peer, 'room-joined'); peer.emit('join-room', { roomCode, playerName: 'Peer' });
+  const { token: peerToken } = await response;
+  assert.equal(typeof peerToken, 'string');
   for (const socket of clients) {
-    response = event(socket, 'room-state'); socket.emit('sit-down', { buyInBB: 50 }); await response;
+    response = event(socket, 'room-state'); socket.emit('sit-down', { buyIn: 100 });
+    const view = await response;
+    assert(!JSON.stringify(view).includes(peerToken), 'room-state must not carry tokens');
   }
   response = event(host, 'hand-state'); host.emit('start-hand');
   const initial = (await response).handState;
@@ -50,10 +54,30 @@ try {
   assert.equal(current.actionHistory.length, initial.actionHistory.length + 1);
   response = event(host, 'error'); host.emit('action', payload);
   assert.match((await response).message, /stale/);
+
+  // Token reconnect: the peer's socket drops and a new one reclaims the seat mid-hand.
+  peer.disconnect();
+  await pause(100);
+  const back = io(`http://localhost:${port}`, { transports: ['websocket'], reconnection: false });
+  clients.push(back); await event(back, 'connect');
+  const joined = event(back, 'room-joined');
+  const snapshot = event(back, 'hand-state');
+  back.emit('join-room', { roomCode, playerName: 'Someone', token: peerToken });
+  assert.equal((await joined).reconnected, true);
+  const resumed = await snapshot;
+  assert.equal(resumed.handState.id, initial.id);
+  assert.equal(resumed.handState.players.find(p => p.id === 'p1').holeCards.filter(Boolean).length, 2);
+
+  // A name alone cannot take the seat.
+  const stranger = io(`http://localhost:${port}`, { transports: ['websocket'], reconnection: false });
+  clients.push(stranger); await event(stranger, 'connect');
+  response = event(stranger, 'error'); stranger.emit('join-room', { roomCode, playerName: 'Peer' });
+  assert.match((await response).message, /Name already taken/);
+
   const health = await fetch(`http://localhost:${port}/api/health`);
   assert.equal(health.status, 200);
   assert.equal(child.exitCode, null);
-  console.log('PASS socket server survives malformed payloads and rejects stale/duplicate actions');
+  console.log('PASS socket server survives malformed payloads, rejects stale/duplicate actions, and reconnects by token only');
 } finally {
   for (const socket of clients) socket.disconnect();
   if (child.exitCode === null) child.kill();

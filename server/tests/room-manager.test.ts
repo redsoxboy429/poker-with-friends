@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { RoomManager } from '../src/room-manager.js';
-import { GameMode } from 'poker-engine';
+import { GameMode, GameVariant } from 'poker-engine';
 
 const DEFAULT_SETTINGS = {
   gameMode: GameMode.SpecificGame,
+  variant: GameVariant.NLH,
   smallBlind: 5,
   bigBlind: 10,
   startingChips: 1000,
@@ -94,20 +95,34 @@ describe('RoomManager', () => {
   });
 
   describe('reconnection', () => {
-    it('reconnects a disconnected player by name', () => {
+    it('reconnects a disconnected player with their token, keeping seat and chips', () => {
       const code = rm.createRoom('socket1', 'Josh', DEFAULT_SETTINGS);
-      rm.joinRoom('socket2', 'Alice', code);
+      const { token } = rm.joinRoom('socket2', 'Alice', code);
+      rm.sitDown('socket2', 1000);
 
-      // Disconnect Alice
       rm.handleDisconnect('socket2');
       const room = rm.getRoom(code)!;
       expect(room.players.get('socket2')?.connected).toBe(false);
+      expect(room.seatMap[1]).toBe('socket2'); // seat kept while disconnected
 
-      // Reconnect Alice with new socket
-      const { seatIndex } = rm.joinRoom('socket3', 'Alice', code);
-      expect(seatIndex).toBe(1); // Same seat
-      expect(room.players.get('socket3')?.connected).toBe(true);
+      const result = rm.joinRoom('socket3', 'ignored', code, token);
+      expect(result).toMatchObject({ seatIndex: 1, playerId: 'p1', reconnected: true });
+      expect(room.players.get('socket3')).toMatchObject({ connected: true, chips: 1000, name: 'Alice' });
       expect(room.players.has('socket2')).toBe(false); // Old socket cleaned up
+    });
+
+    it('a name alone cannot reclaim a disconnected seat', () => {
+      const code = rm.createRoom('socket1', 'Josh', DEFAULT_SETTINGS);
+      rm.joinRoom('socket2', 'Alice', code);
+      rm.handleDisconnect('socket2');
+      expect(() => rm.joinRoom('socket3', 'Alice', code)).toThrow('Name already taken');
+      expect(() => rm.joinRoom('socket3', 'alice', code, 'wrong-token')).toThrow('Name already taken');
+    });
+
+    it('tokens are never included in the room state view', () => {
+      const code = rm.createRoom('socket1', 'Josh', DEFAULT_SETTINGS);
+      const { token } = rm.joinRoom('socket2', 'Alice', code);
+      expect(JSON.stringify(rm.getRoomStateView(rm.getRoom(code)!))).not.toContain(token);
     });
   });
 

@@ -51,17 +51,16 @@ describe('nine-game multiplayer boundaries', () => {
       expect(controller.getState()!.smallBlind).toBe(sb); expect(controller.getState()!.bigBlind).toBe(bb);
     }
   });
-  it('adds queued chips to settled winnings instead of overwriting the stack', () => {
+  it('applies a queued top-up after settlement as max(stack, target), never lowering winnings', () => {
     vi.useFakeTimers();
     const { controller, room } = table(); controller.startHand();
     const player = room.players.get('s1')!;
-    player.queuedAddOn = 150; player.queuedAddOnIncrement = 50;
-    controller.handleAction('s0', ActionType.Fold);
-    const settled = player.chips;
-    vi.advanceTimersByTime(200);
-    controller.startHand();
-    expect(player.chips).toBe(settled + 50);
-    expect([...room.players.values()].reduce((sum, p) => sum + p.chips, 0)).toBe(250);
+    player.queuedAddOn = 150; // top up TO 150, applied after settlement
+    const actor = controller.getState()!.players[controller.getState()!.activePlayerIndex];
+    controller.handleAction(`s${actor.seatIndex}`, ActionType.Fold);
+    const settled = controller.getState()!.players.find(p => p.id === 'p1')!.chips;
+    expect(player.chips).toBe(Math.max(settled, 150));
+    expect(player.queuedAddOn).toBeUndefined();
     controller.destroy();
   });
   it('host pause blocks actions and automatic resume until the host resumes', () => {
