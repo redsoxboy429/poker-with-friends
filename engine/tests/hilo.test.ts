@@ -2,6 +2,7 @@
 // Tests for Hi-Lo variants (Stud Hi-Lo + Omaha Hi-Lo)
 // ============================================================
 
+import { startStud } from './helpers.js';
 import { describe, it, expect } from 'vitest';
 import { StudHiLoGame } from '../src/games/stud-hilo.js';
 import { PLO8Game } from '../src/games/plo8.js';
@@ -115,7 +116,7 @@ describe('7-Card Stud Hi-Lo (8-or-better)', () => {
   it('posts antes and bring-in', () => {
     const players = makePlayers(4);
     const game = new StudHiLoGame(STUD8_CONFIG, players, 0);
-    game.start();
+    startStud(game);
     const state = game.getState();
     const bringIn = state.actionHistory.find(a => a.type === ActionType.BringIn);
     expect(bringIn).toBeDefined();

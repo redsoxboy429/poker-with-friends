@@ -62,3 +62,9 @@ export {
   type GameSessionConfig,
   type GameSessionState,
 } from './session.js';
+export {
+  TableRotation,
+  type PlannedHand,
+  type TableRotationState,
+  type TableRotationOptions,
+} from './table-rotation.js';

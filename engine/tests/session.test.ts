@@ -25,20 +25,20 @@ describe('GameSession — Rotation Modes', () => {
     ]);
   });
 
-  it('8-game rotation has 8 games (HORSE + NLH, PLO, 27SD)', () => {
+  it('8-game rotation is the WSOP 8-game (HORSE + NLH, PLO, 2-7 Triple Draw)', () => {
     expect(EIGHT_GAME_ROTATION).toHaveLength(8);
     expect(EIGHT_GAME_ROTATION.slice(0, 5)).toEqual(HORSE_ROTATION);
     expect(EIGHT_GAME_ROTATION.slice(5)).toEqual([
       GameVariant.NLH,
       GameVariant.PLO,
-      GameVariant.TwoSevenSD,
+      GameVariant.TwoSevenTD,
     ]);
   });
 
-  it('9-game rotation has 9 games (8-game + 27TD)', () => {
+  it('9-game rotation is the WSOP 9-game (8-game + NL 2-7 Single Draw)', () => {
     expect(NINE_GAME_ROTATION).toHaveLength(9);
     expect(NINE_GAME_ROTATION.slice(0, 8)).toEqual(EIGHT_GAME_ROTATION);
-    expect(NINE_GAME_ROTATION[8]).toBe(GameVariant.TwoSevenTD);
+    expect(NINE_GAME_ROTATION[8]).toBe(GameVariant.TwoSevenSD);
   });
 
   it('HORSE starts with first variant', () => {
@@ -189,11 +189,11 @@ describe('GameSession — Bet Caps', () => {
     expect(session.getCapBB()).toBe(80);
   });
 
-  it('27SD gets 30 BB cap in 8-game', () => {
-    const session = new GameSession({ mode: GameMode.EightGame, numPlayers: 4 });
+  it('27SD gets 30 BB cap in 9-game', () => {
+    const session = new GameSession({ mode: GameMode.NineGame, numPlayers: 4 });
 
-    // Advance to 27SD (game index 7, after 7*8=56 hands)
-    for (let i = 0; i < 7 * HANDS_PER_VARIANT; i++) {
+    // Advance to 27SD (game index 8, after 8*8=64 hands)
+    for (let i = 0; i < 8 * HANDS_PER_VARIANT; i++) {
       session.advanceHand(i % 4);
     }
     expect(session.getCurrentVariant()).toBe(GameVariant.TwoSevenSD);

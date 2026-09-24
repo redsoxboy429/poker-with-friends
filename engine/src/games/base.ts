@@ -19,8 +19,9 @@ import {
   LowHandResult,
   BettingStructure,
   AvailableActions,
+  CHIP_UNIT,
 } from '../types.js';
-import { getAvailableActions, collectBets, validateAction } from '../betting.js';
+import { getAvailableActions, collectBets, validateAction, getFixedLimitIncrement } from '../betting.js';
 
 /** Generate a simple unique ID */
 function generateHandId(): string {
@@ -159,7 +160,8 @@ export abstract class BaseGame {
     this.setFirstActor();
     const canAct = this.state.players.filter(p => !p.sittingOut && !p.folded && !p.allIn);
     if (canAct.length <= 1 && (!canAct.length || canAct[0].bet >= this.state.currentBet)) {
-      this.state.pots = collectBets(this.state.players, this.state.pots);
+      this.state.pendingBringIn = false;
+      this.state.pots = this.collect();
       this.state.currentBet = 0;
       if (this.shouldRunoutOnAllIn()) {
         this.captureShowdownStart();
@@ -188,6 +190,9 @@ export abstract class BaseGame {
 
     const player = this.state.players[this.state.activePlayerIndex];
     const action: PlayerAction = { type: actionType, playerId, amount: validation.adjustedAmount };
+    const isLimit = this.state.bettingStructure === BettingStructure.FixedLimit;
+    const increment = isLimit ? getFixedLimitIncrement(this.state) : 0;
+    const betBefore = this.state.currentBet;
 
     // Execute the action
     switch (actionType) {
@@ -234,6 +239,20 @@ export abstract class BaseGame {
       }
     }
 
+    if (actionType === ActionType.Bet && this.state.pendingBringIn) {
+      // The stud bring-in decision: less than the small bet is the bring-in itself.
+      this.state.pendingBringIn = false;
+      if (this.state.currentBet < this.state.smallBet) action.type = ActionType.BringIn;
+    }
+    if (isLimit && (action.type === ActionType.Bet || action.type === ActionType.Raise)) {
+      const increase = this.state.currentBet - betBefore;
+      // An all-in under half a bet is not a raise: no cap slot, no reopening.
+      if (player.allIn && increase < increment / 2) action.fullRaise = false;
+      if (this.state.openPairFourth && this.state.phase === GamePhase.BettingFourth && increase >= this.state.bigBet) {
+        this.state.bigBetInForce = true;
+      }
+    }
+
     action.betLevel = this.state.currentBet;
     this.state.actionHistory.push(action);
 
@@ -247,7 +266,7 @@ export abstract class BaseGame {
     // Advance to next actor or next phase
     if (this.isBettingRoundComplete()) {
       // Collect bets into pot(s)
-      this.state.pots = collectBets(this.state.players, this.state.pots);
+      this.state.pots = this.collect();
       this.state.currentBet = 0;
       this.state.lastRaise = this.config.smallBet ?? this.config.bigBlind;
 
@@ -403,29 +422,26 @@ export abstract class BaseGame {
     this.state.activePlayerIndex = next;
   }
 
+  /**
+   * Collect bets into pots, recording any uncalled bet returned to its bettor
+   * (spec §3: returned, not won).
+   */
+  protected collect(): Pot[] {
+    return collectBets(this.state.players, this.state.pots, (playerId, amount) => {
+      (this.state.uncalledReturns ??= []).push({ playerId, amount });
+    });
+  }
+
   /** Award all pots to the last remaining player (everyone else folded) */
   protected awardPotToLastStanding(winner: PlayerState): void {
-    // Calculate total pot BEFORE collectBets (which returns single-eligible pots to player)
-    const outstandingBets = this.state.players.reduce((sum, p) => sum + p.bet, 0);
-    const existingPots = this.state.pots.reduce((sum, p) => sum + p.amount, 0);
-    const totalWon = outstandingBets + existingPots;
+    // Collecting first returns the winner's uncalled bet; what remains is won.
+    this.state.pendingBringIn = false;
+    this.state.pots = this.collect();
+    const won = this.state.pots.reduce((sum, p) => sum + p.amount, 0);
+    winner.chips += won;
 
-    // Collect bets (returns excess to winner since they're the only eligible player)
-    this.state.pots = collectBets(this.state.players, this.state.pots);
-
-    // Award any remaining pots
-    const remainingPots = this.state.pots.reduce((sum, p) => sum + p.amount, 0);
-    winner.chips += remainingPots;
-
-    // Record winner with the full pot amount (no hand description — won by fold)
-    this._winners = [{ playerId: winner.id, name: winner.name, amount: totalWon }];
-
-    // Keep pots for display (chips already distributed above).
-    // For fold wins, collectBets may have returned all pots to the winner (single eligible),
-    // so reconstruct a display pot with the full amount.
-    if (this.state.pots.length === 0 && totalWon > 0) {
-      this.state.pots = [{ amount: totalWon, eligiblePlayerIds: [winner.id] }];
-    }
+    // No hand description: won by fold. Pots stay for display (already paid).
+    this._winners = [{ playerId: winner.id, name: winner.name, amount: won }];
     this.state.phase = GamePhase.Complete;
   }
 
@@ -480,7 +496,7 @@ export abstract class BaseGame {
   protected resolveShowdown(): boolean {
     if (this.state.phase === GamePhase.Complete) return true;
     // Collect any outstanding bets and merge pots with identical active contenders
-    this.state.pots = collectBets(this.state.players, this.state.pots);
+    this.state.pots = this.collect();
     this.captureShowdownStart();
     this.state.phase = GamePhase.Showdown;
 
@@ -733,26 +749,15 @@ export abstract class BaseGame {
   // ============================================================
 
   /**
-   * Get the minimum chip denomination for splitting pots.
-   * Uses smallBlind for big-bet games, or smallest non-zero forced bet.
-   */
-  protected getMinChipDenomination(): number {
-    if (this.config.smallBlind > 0) return this.config.smallBlind;
-    if (this.config.ante > 0) return this.config.ante;
-    return 1; // fallback
-  }
-
-  /**
-   * Split a pot amount into two halves, using minChip as the smallest denomination.
-   * Returns [firstHalf, secondHalf] where firstHalf gets the odd chip.
+   * Split a pot into two halves in whole $0.25 chips. The first half (high)
+   * gets the odd chip. Any sub-chip remainder (only possible with non-standard
+   * stakes) also goes to the first half, so the halves always sum to the pot.
    */
   protected splitPotHalves(amount: number): [number, number] {
-    const minChip = this.getMinChipDenomination();
-    // How many minimum chips in the pot
-    const units = Math.round(amount / minChip);
-    const firstUnits = Math.ceil(units / 2);
-    const secondUnits = units - firstUnits;
-    return [firstUnits * minChip, secondUnits * minChip];
+    const units = Math.floor(amount / CHIP_UNIT + 1e-9);
+    const secondUnits = Math.floor(units / 2);
+    const second = secondUnits * CHIP_UNIT;
+    return [amount - second, second];
   }
 
   /**
@@ -781,10 +786,11 @@ export abstract class BaseGame {
   protected divideAmongWinners(amount: number, winners: PlayerState[]): number[] {
     if (winners.length === 1) return [amount];
 
-    const minChip = this.getMinChipDenomination();
-    const units = Math.round(amount / minChip);
+    const units = Math.floor(amount / CHIP_UNIT + 1e-9);
     const baseUnits = Math.floor(units / winners.length);
     let remainderUnits = units - baseUnits * winners.length;
+    // Sub-chip dust (non-standard stakes only) goes to the first OOP winner.
+    let dust = amount - units * CHIP_UNIT;
 
     // Sort winners by OOP to assign remainder chips
     const sorted = this.sortByOOP(winners);
@@ -796,7 +802,8 @@ export abstract class BaseGame {
         chips += 1;
         remainderUnits--;
       }
-      amounts.set(w, chips * minChip);
+      amounts.set(w, chips * CHIP_UNIT + dust);
+      dust = 0;
     }
 
     // Return in original order

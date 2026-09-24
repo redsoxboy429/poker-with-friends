@@ -22,16 +22,18 @@ export const HORSE_ROTATION: GameVariant[] = [
   GameVariant.StudHiLo,
 ];
 
+/** WSOP 8-game: HORSE + NLH + PLO + 2-7 Triple Draw. */
 export const EIGHT_GAME_ROTATION: GameVariant[] = [
   ...HORSE_ROTATION,
   GameVariant.NLH,
   GameVariant.PLO,
-  GameVariant.TwoSevenSD,
+  GameVariant.TwoSevenTD,
 ];
 
+/** WSOP 9-game: 8-game + No-Limit 2-7 Single Draw. Also the dealer's-choice menu. */
 export const NINE_GAME_ROTATION: GameVariant[] = [
   ...EIGHT_GAME_ROTATION,
-  GameVariant.TwoSevenTD,
+  GameVariant.TwoSevenSD,
 ];
 
 /** Hands per variant in rotation modes */

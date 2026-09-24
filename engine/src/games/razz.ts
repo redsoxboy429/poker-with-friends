@@ -49,25 +49,7 @@ export class RazzGame extends BaseStudGame {
 
   protected setFirstActorForStreet(): void {
     // In Razz: lowest showing hand acts first
-    const activePlayers = this.state.players.filter(p => !p.folded && !p.sittingOut);
-
-    let bestIdx = -1;
-    let bestLowValue = Infinity;
-
-    for (let i = 0; i < this.state.players.length; i++) {
-      const p = this.state.players[i];
-      if (p.folded || p.sittingOut || p.allIn) continue;
-
-      const value = this.getShowingHandValue(p.id, true);
-      if (value < bestLowValue) {
-        bestLowValue = value;
-        bestIdx = i;
-      }
-    }
-
-    if (bestIdx >= 0) {
-      this.state.activePlayerIndex = bestIdx;
-    }
+    this.setFirstActorByShowing((a, b) => a < b, true);
   }
 
   protected evaluateHand(player: PlayerState): HandResult {

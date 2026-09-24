@@ -130,6 +130,11 @@ export enum ActionType {
 export interface PlayerAction {
   /** Bet level after a voluntary action, used to determine whether raising reopened. */
   betLevel?: number;
+  /**
+   * Fixed limit: false for an all-in raise (or opening bet) smaller than half
+   * a bet. It neither counts toward the cap nor reopens the betting.
+   */
+  fullRaise?: boolean;
   type: ActionType;
   amount?: number;           // For bet/raise/call/all-in
   playerId: string;
@@ -222,6 +227,14 @@ export interface HandState {
   playersAtStreetStart: number;
   /** For draw games: how many draws are remaining */
   drawsRemaining?: number;
+  /** Stud: the bring-in player must choose to bring in or complete */
+  pendingBringIn?: boolean;
+  /** Stud high: an open pair on 4th street allows the big bet this round */
+  openPairFourth?: boolean;
+  /** Stud high 4th street: the big bet has been made, so raises are big bets */
+  bigBetInForce?: boolean;
+  /** Unmatched bets returned to their bettor this hand (not winnings) */
+  uncalledReturns?: { playerId: string; amount: number }[];
 }
 
 /** Table configuration */
@@ -254,7 +267,14 @@ export interface AvailableActions {
   canRaise: boolean;
   minRaise: number;
   maxRaise: number;
+  /** Fixed limit with a choice of sizes (bring-in vs complete, open pair): the only legal bet amounts */
+  betOptions?: number[];
+  /** Fixed limit with a choice of sizes: the only legal raise-to amounts */
+  raiseOptions?: number[];
 }
+
+/** Smallest chip. Every stake, bet and payout is a whole multiple of it. */
+export const CHIP_UNIT = 0.25;
 
 /** Result of a showdown for one pot */
 export interface PotResult {

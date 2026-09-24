@@ -11,6 +11,7 @@
 // 4. Next raise is TO $15 (10 + 5)
 // 5. On 5th street (big bet=$10): raise is TO $20 (10 + 10)
 
+import { startStud } from './helpers.js';
 import { describe, it, expect } from 'vitest';
 import { RazzGame } from '../src/games/razz.js';
 import {
@@ -62,7 +63,7 @@ describe('Stud Complete Raise Audit', () => {
   it('after bring-in of $3: minRaise (complete) is exactly $5, NOT $8', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -86,7 +87,7 @@ describe('Stud Complete Raise Audit', () => {
   it('after completion to $5: next raise is to $10 (5 + 5)', () => {
     const players = makePlayers(3, 1000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -113,7 +114,7 @@ describe('Stud Complete Raise Audit', () => {
   it('after raise to $10: next raise is to $15 (10 + 5) on 3rd street', () => {
     const players = makePlayers(3, 1000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -143,7 +144,7 @@ describe('Stud Complete Raise Audit', () => {
   it('on 5th street (big bet=$10): after a $10 bet, raise is to $20', () => {
     const players = makePlayers(3, 5000); // More chips for a longer hand
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -206,7 +207,7 @@ describe('Stud Complete Raise Audit', () => {
   it('scenario: bring-in -> complete -> raise -> raise sequence validates correct amounts', () => {
     const players = makePlayers(3, 2000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -246,7 +247,7 @@ describe('Stud Complete Raise Audit', () => {
   it('complete does NOT stack: bring-in $3 -> complete $5, NOT bring-in + complete = $8', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 

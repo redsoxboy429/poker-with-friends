@@ -1,6 +1,7 @@
 // ============================================================
 // Game Engine Integration Tests
 // ============================================================
+import { startStud } from './helpers.js';
 import { describe, it, expect } from 'vitest';
 import { NLHGame } from '../src/games/nlh.js';
 import { PLOGame } from '../src/games/plo.js';
@@ -281,7 +282,7 @@ describe('RazzGame', () => {
   it('completes a hand with fold', () => {
     const players = makePlayers(2);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
     const activeId = state.players[state.activePlayerIndex].id;

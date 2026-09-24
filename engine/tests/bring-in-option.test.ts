@@ -13,6 +13,7 @@
 // C. Everyone folds to bring-in: bring-in posts, all fold → bring-in wins
 // D. One call, one fold: bring-in posts, call, fold, call → round ends
 
+import { startStud } from './helpers.js';
 import { describe, it, expect } from 'vitest';
 import { RazzGame } from '../src/games/razz.js';
 import {
@@ -57,7 +58,7 @@ describe('Bring-In Option Logic', () => {
     it('should end betting round when all players call bring-in', () => {
       const players = makePlayers(4, 1000);
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
       expect(state.phase).toBe(GamePhase.BettingThird);
@@ -108,7 +109,7 @@ describe('Bring-In Option Logic', () => {
     it('should give bring-in an option when someone raises to small bet', () => {
       const players = makePlayers(4, 1000);
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
       expect(state.phase).toBe(GamePhase.BettingThird);
@@ -159,7 +160,7 @@ describe('Bring-In Option Logic', () => {
     it('should award pot when all players fold to bring-in', () => {
       const players = makePlayers(4, 1000);
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
       expect(state.phase).toBe(GamePhase.BettingThird);
@@ -201,7 +202,7 @@ describe('Bring-In Option Logic', () => {
     it('should end round when bring-in and remainders all matched', () => {
       const players = makePlayers(4, 1000);
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
       expect(state.phase).toBe(GamePhase.BettingThird);
@@ -244,7 +245,7 @@ describe('Bring-In Option Logic', () => {
       // This verifies basic bring-in setup
       const players = makePlayers(4, 1000);
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
       let bringingInPlayer: PlayerState | null = null;
@@ -263,7 +264,7 @@ describe('Bring-In Option Logic', () => {
     it('should track action history correctly with BringIn action included', () => {
       const players = makePlayers(4, 1000);
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
 
@@ -281,7 +282,7 @@ describe('Bring-In Option Logic', () => {
     it('should handle bring-in with all-in correctly', () => {
       const players = makePlayers(4, 1); // Very short stacks
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
 
@@ -295,7 +296,7 @@ describe('Bring-In Option Logic', () => {
     it('should correctly identify when betting round is complete (no completion)', () => {
       const players = makePlayers(4, 1000);
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
       expect(state.phase).toBe(GamePhase.BettingThird);
@@ -338,7 +339,7 @@ describe('Bring-In Option Logic', () => {
     it('should keep betting round open when someone completes', () => {
       const players = makePlayers(4, 1000);
       const game = new RazzGame(RAZZ_CONFIG, players, 0);
-      game.start();
+      startStud(game);
 
       let state = game.getState();
       expect(state.phase).toBe(GamePhase.BettingThird);

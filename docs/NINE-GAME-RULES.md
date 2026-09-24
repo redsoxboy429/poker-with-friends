@@ -2,7 +2,7 @@
 
 The reference for the nine-game build. Tests are written from this document, not from the current code. Where the two disagree, this document wins once Josh signs it off.
 
-Status: **SIGNED OFF by Josh 2026-09-23.** Items marked **[DECIDE]** need an answer. Items marked **[CONFIRMED]** were settled by Josh on the date shown. Everything else is a standard rule proposed as the default.
+Status: **SIGNED OFF by Josh 2026-09-23.** Items marked **[CONFIRMED]** were settled by Josh on the date shown. Everything else is a standard rule Josh accepted as the default.
 
 Sources for standard rules: PokerStars game rules (2-7, Stud, Razz), Robert's Rules of Poker, and the WSOP Nine Game Mix definition.
 

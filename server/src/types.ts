@@ -27,6 +27,25 @@ export interface RoomSettings {
   // Limit-specific
   smallBet?: number;
   bigBet?: number;
+  // Stud forced bets (default: a quarter of the small bet)
+  ante?: number;
+  bringIn?: number;
+  // Buy-in range in dollars (also the top-up maximum)
+  buyInMin?: number;
+  buyInMax?: number;
+}
+
+/** One row of the server-owned session ledger, keyed by memberId. */
+export interface LedgerRow {
+  memberId: string;
+  name: string;
+  /** Total bought in: first buy-in plus every top-up actually credited */
+  buyIn: number;
+  /** Chips taken off the table when leaving */
+  cashOut: number;
+  /** Current stack (0 once the player has left) */
+  stack: number;
+  left: boolean;
 }
 
 export interface RoomPlayer {
@@ -35,11 +54,19 @@ export interface RoomPlayer {
   seatIndex: number;
   chips: number;
   connected: boolean;
-  playerId: string;               // Engine player ID (p0, p1, etc.)
+  playerId: string;               // Engine player ID: p{seat}. Seats are only freed between hands.
+  /** Stable identity for the ledger; never reused. */
+  memberId: string;
+  /** Secret reconnect credential, sent only to this player. */
+  token: string;
   sittingOut: boolean;
+  /** Sat out automatically because they were disconnected when a hand was dealt */
+  autoSatOut?: boolean;
   seated: boolean;                // Has bought in and is ready to play
-  queuedAddOn?: number;           // Pending add-on amount (applied on next hand)
-  queuedAddOnIncrement?: number;  // New chips to add; never overwrite settled winnings.
+  /** Mid-hand top-up target, applied after settlement as max(stack, target) */
+  queuedAddOn?: number;
+  /** Leaving or kicked while in a live hand; removed once the hand settles */
+  pendingLeave?: 'leave' | 'kick';
 }
 
 export interface RoomStateView {
@@ -54,8 +81,11 @@ export interface RoomStateView {
     sittingOut: boolean;
     seated: boolean;
     queuedAddOn?: number;
+    playerId: string;
+    leaving: boolean;
   }>;
   settings: RoomSettings;
+  ledger: LedgerRow[];
   state: 'lobby' | 'playing';
   maxSeats: number;
 }
@@ -77,14 +107,16 @@ export interface PlayerStateView extends Omit<PlayerState, 'holeCards'> {
 /** Client → Server events */
 export interface ClientToServerEvents {
   'create-room': (data: { playerName: string; settings: RoomSettings }) => void;
-  'join-room': (data: { playerName: string; roomCode: string }) => void;
-  'sit-down': (data: { buyInBB: number }) => void;
+  'join-room': (data: { playerName: string; roomCode: string; token?: string }) => void;
+  /** Buy-in in dollars */
+  'sit-down': (data: { buyIn: number }) => void;
   'leave-room': () => void;
   'action': (data: { type: ActionType; amount?: number; handId: string; actionCount: number }) => void;
   'discard': (data: { cardIndices: number[]; handId: string; actionCount: number }) => void;
   'start-hand': () => void;
   'pick-variant': (data: { variant: GameVariant }) => void;
   'update-settings': (data: Partial<RoomSettings>) => void;
+  /** Top up TO this many dollars (never "add X") */
   'add-on': (data: { amount: number }) => void;
   'pause-countdown': () => void;
   'resume-countdown': () => void;
@@ -96,8 +128,8 @@ export interface ClientToServerEvents {
 
 /** Server → Client events */
 export interface ServerToClientEvents {
-  'room-created': (data: { roomCode: string; roomState: RoomStateView }) => void;
-  'room-joined': (data: { roomState: RoomStateView; yourPlayerId: string }) => void;
+  'room-created': (data: { roomCode: string; roomState: RoomStateView; yourPlayerId: string; token: string }) => void;
+  'room-joined': (data: { roomState: RoomStateView; yourPlayerId: string; token: string; reconnected: boolean }) => void;
   'room-state': (data: RoomStateView) => void;
   'hand-state': (data: {
     handState: PlayerView;
@@ -113,7 +145,9 @@ export interface ServerToClientEvents {
       rotationLength: number;
       currentVariant: string | null;
       chooserSeatIndex: number | null;
+      needsChoice: boolean;
       capBB: number | null;
+      buttonSeat: number | null;
     };
     chipsBehind?: Record<string, number>;
   }) => void;
@@ -126,6 +160,8 @@ export interface ServerToClientEvents {
   'player-joined': (data: { playerName: string; seatIndex: number }) => void;
   'player-left': (data: { playerName: string; seatIndex: number }) => void;
   'dc-choose': () => void;
+  /** Kicked, or the room is gone: clear the stored reconnect token */
+  'removed': (data: { reason: string }) => void;
   'countdown': (data: { seconds: number }) => void;
   'game-stopped': () => void;
   'error': (data: { message: string }) => void;

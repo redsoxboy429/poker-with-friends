@@ -4,6 +4,7 @@
 // Verifies that when all but one player fold, the hand completes
 // correctly: phase=Complete, correct winner, chips awarded, pots clear.
 
+import { startStud } from './helpers.js';
 import { describe, it, expect } from 'vitest';
 import {
   createGame,
@@ -82,7 +83,7 @@ describe('Fold-Win: Heads-up', () => {
     const players = makePlayers(2);
     const startTotal = totalChips(players);
     const game = createGame(GameVariant.Razz, players, 0, RAZZ_CONFIG);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
     const activeId = state.players[state.activePlayerIndex].id;

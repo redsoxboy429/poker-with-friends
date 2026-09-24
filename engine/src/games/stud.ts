@@ -31,25 +31,11 @@ export class StudGame extends BaseStudGame {
 
   protected setFirstActorForStreet(): void {
     // In Stud High: highest showing hand acts first
-    const activePlayers = this.state.players.filter(p => !p.folded && !p.sittingOut);
+    this.setFirstActorByShowing((a, b) => a > b, false);
+  }
 
-    let bestIdx = -1;
-    let bestHighValue = -1;
-
-    for (let i = 0; i < this.state.players.length; i++) {
-      const p = this.state.players[i];
-      if (p.folded || p.sittingOut || p.allIn) continue;
-
-      const value = this.getShowingHandValue(p.id, false);
-      if (value > bestHighValue) {
-        bestHighValue = value;
-        bestIdx = i;
-      }
-    }
-
-    if (bestIdx >= 0) {
-      this.state.activePlayerIndex = bestIdx;
-    }
+  protected override hasOpenPairOption(): boolean {
+    return true;
   }
 
   protected evaluateHand(player: PlayerState): HandResult {

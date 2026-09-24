@@ -2,6 +2,7 @@
 // Tests for Limit Hold'em and 7-Card Stud High
 // ============================================================
 
+import { startStud } from './helpers.js';
 import { describe, it, expect } from 'vitest';
 import { LHEGame } from '../src/games/lhe.js';
 import { StudGame } from '../src/games/stud.js';
@@ -209,7 +210,7 @@ describe('7-Card Stud High', () => {
     // that the bring-in was posted by checking action history
     const players = makePlayers(4);
     const game = new StudGame(STUD_CONFIG, players, 0);
-    game.start();
+    startStud(game);
     const state = game.getState();
 
     const bringInAction = state.actionHistory.find(a => a.type === ActionType.BringIn);

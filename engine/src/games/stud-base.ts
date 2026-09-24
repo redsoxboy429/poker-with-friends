@@ -40,7 +40,8 @@ export abstract class BaseStudGame extends BaseGame {
     const studConfig: TableConfig = {
       ...config,
       bettingStructure: BettingStructure.FixedLimit,
-      bringIn: config.bringIn || Math.floor((config.smallBet ?? config.smallBlind) / 2) || 1,
+      // Default bring-in: a quarter of the small bet in whole $0.25 chips (spec §2)
+      bringIn: config.bringIn || Math.max(0.25, Math.floor((config.smallBet ?? config.smallBlind) / 4 / 0.25) * 0.25),
     };
     super(studConfig, players, buttonIndex);
   }
@@ -149,6 +150,14 @@ export abstract class BaseStudGame extends BaseGame {
 
     if (worstIdx >= 0) {
       const bringInPlayer = this.state.players[worstIdx];
+      if (bringInPlayer.chips > this.config.bringIn) {
+        // The bring-in player chooses: bring in, or complete to the small bet
+        // (docs/NINE-GAME-RULES.md §4). act() records the choice.
+        this.state.pendingBringIn = true;
+        this.state.activePlayerIndex = worstIdx;
+        return;
+      }
+      // Too short to complete: the bring-in is posted automatically (all-in).
       const amount = Math.min(this.config.bringIn, bringInPlayer.chips);
       bringInPlayer.chips -= amount;
       bringInPlayer.bet += amount;
@@ -168,6 +177,36 @@ export abstract class BaseStudGame extends BaseGame {
 
   protected setFirstActor(): void {
     // Already set by postBringIn
+  }
+
+  /**
+   * Stud high only: an open pair on 4th street lets players bet the big bet.
+   * Stud/8 and Razz keep the small bet.
+   */
+  protected hasOpenPairOption(): boolean {
+    return false;
+  }
+
+  /**
+   * First actor from 4th street on: the best showing hand among players who
+   * can still bet. Ties go to the tied player closest to the left of the
+   * (fixed) button, so the scan starts there and keeps the first best found.
+   */
+  protected setFirstActorByShowing(isBetter: (a: number, b: number) => boolean, useLow: boolean): void {
+    const n = this.state.players.length;
+    let bestIdx = -1;
+    let bestValue = 0;
+    for (let k = 1; k <= n; k++) {
+      const i = (this.state.buttonIndex + k) % n;
+      const p = this.state.players[i];
+      if (p.folded || p.sittingOut || p.allIn) continue;
+      const value = this.getShowingHandValue(p.id, useLow);
+      if (bestIdx < 0 || isBetter(value, bestValue)) {
+        bestIdx = i;
+        bestValue = value;
+      }
+    }
+    if (bestIdx >= 0) this.state.activePlayerIndex = bestIdx;
   }
 
   // setFirstActorForStreet remains abstract — differs between Razz (lowest board)
@@ -196,6 +235,13 @@ export abstract class BaseStudGame extends BaseGame {
           const card = this.deck.deal();
           p.holeCards.push(card);
           this.upCards.get(p.id)!.push(card);
+        }
+        if (phase === GamePhase.BettingFourth && this.hasOpenPairOption()) {
+          this.state.openPairFourth = activePlayers.some(p => {
+            const [a, b] = this.upCards.get(p.id) ?? [];
+            return !!a && !!b && a.rank === b.rank;
+          });
+          this.state.bigBetInForce = false;
         }
         break;
 
@@ -245,7 +291,8 @@ export abstract class BaseStudGame extends BaseGame {
 
     for (let i = 0; i < this.state.players.length; i++) {
       const p = this.state.players[i];
-      if (p.sittingOut) continue;
+      // A player all-in from the ante cannot bring in; it passes to the next-worst door card.
+      if (p.sittingOut || p.allIn) continue;
 
       const doorCard = this.upCards.get(p.id)?.[0];
       if (!doorCard) continue;
@@ -274,7 +321,8 @@ export abstract class BaseStudGame extends BaseGame {
 
     for (let i = 0; i < this.state.players.length; i++) {
       const p = this.state.players[i];
-      if (p.sittingOut) continue;
+      // A player all-in from the ante cannot bring in; it passes to the next-worst door card.
+      if (p.sittingOut || p.allIn) continue;
 
       const doorCard = this.upCards.get(p.id)?.[0];
       if (!doorCard) continue;

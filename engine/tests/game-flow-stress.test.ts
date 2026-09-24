@@ -68,6 +68,11 @@ function playoutCheckToShowdown(game: NLHGame | PLOGame | RazzGame): void {
       game.act(activePlayer.id, ActionType.Call);
     } else if (actions.canFold) {
       game.act(activePlayer.id, ActionType.Fold);
+    } else if (actions.canBet) {
+      // Stud bring-in decision: post the bring-in
+      game.act(activePlayer.id, ActionType.Bet, actions.minBet);
+    } else {
+      throw new Error(`No legal action in phase ${state.phase}`);
     }
     state = game.getState();
   }

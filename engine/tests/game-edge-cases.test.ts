@@ -4,6 +4,7 @@
 // Comprehensive tests for betting edge cases, multi-player scenarios,
 // position rules, side pots, and error handling.
 
+import { startStud } from './helpers.js';
 import { describe, it, expect } from 'vitest';
 import { NLHGame } from '../src/games/nlh.js';
 import { PLOGame } from '../src/games/plo.js';
@@ -750,7 +751,7 @@ describe('Razz (7-Card Stud Lowball) Specifics', () => {
   it('bring-in posted by highest door card', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -766,7 +767,7 @@ describe('Razz (7-Card Stud Lowball) Specifics', () => {
   it('chip conservation through Razz hand', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const startTotal = getTotalChips(game.getState());
 
@@ -793,7 +794,7 @@ describe('Razz (7-Card Stud Lowball) Specifics', () => {
   it('deals 7 cards total (3 down, 4 up)', () => {
     const players = makePlayers(2);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
     let safetyCounter = 0;

@@ -10,6 +10,7 @@ import {
   AvailableActions,
   HandState,
   GamePhase,
+  CHIP_UNIT,
 } from './types.js';
 
 const BETTING_PHASES = new Set([
@@ -61,10 +62,10 @@ export function getAvailableActions(state: HandState): AvailableActions {
   const facingBet = toCall > 0;
 
   // Can always fold if facing a bet
-  const canFold = facingBet;
+  let canFold = facingBet;
 
   // Can check if not facing a bet
-  const canCheck = !facingBet;
+  let canCheck = !facingBet;
 
   // Can call if facing a bet and have chips
   const canCall = facingBet && effectiveStack > 0;
@@ -77,6 +78,8 @@ export function getAvailableActions(state: HandState): AvailableActions {
   let canRaise = false;
   let minRaise = 0;
   let maxRaise = 0;
+  let betOptions: number[] | undefined;
+  let raiseOptions: number[] | undefined;
 
   switch (state.bettingStructure) {
     case BettingStructure.NoLimit: {
@@ -118,24 +121,57 @@ export function getAvailableActions(state: HandState): AvailableActions {
       // Small bet on early streets, big bet on later streets
       const increment = getFixedLimitIncrement(state);
       // Cap at 4 bets per round (1 bet + 3 raises), but ONLY in multiway pots.
-      // Heads-up (2 players at street start) = uncapped.
+      // A round that STARTS heads-up is uncapped (docs/NINE-GAME-RULES.md §3).
       const betsThisRound = countBetsThisRound(state);
       const isHeadsUp = state.playersAtStreetStart <= 2;
       const atCap = !isHeadsUp && betsThisRound >= 4;
+      const allInTo = player.bet + effectiveStack;
+      const sizes = (amounts: number[], cap: number) =>
+        [...new Set(amounts.map(a => Math.min(a, cap)))].sort((a, b) => a - b);
 
-      if (!facingBet) {
+      if (state.pendingBringIn) {
+        // Stud bring-in: post the bring-in or complete to the small bet.
+        // It is forced, so there is no check or fold.
+        canCheck = false;
+        canFold = false;
+        canBet = effectiveStack > 0;
+        betOptions = sizes([state.bringIn, state.smallBet], effectiveStack);
+        minBet = betOptions[0];
+        maxBet = betOptions[betOptions.length - 1];
+      } else if (!facingBet) {
         canBet = effectiveStack > 0 && !atCap;
         minBet = Math.min(increment, effectiveStack);
         maxBet = minBet; // Fixed: only one size
+        if (openPairChoice(state)) {
+          betOptions = sizes([state.smallBet, state.bigBet], effectiveStack);
+          maxBet = betOptions[betOptions.length - 1];
+        }
       } else if (!atCap) {
-        // If currentBet is below the increment (bring-in), the first "raise"
-        // is a completion TO the small bet, not currentBet + increment.
+        // If currentBet is below the increment (bring-in or a short all-in), the
+        // first "raise" is a completion TO the bet, not currentBet + increment.
         const raiseTo = state.currentBet < increment
           ? increment                        // Complete to the small bet
           : state.currentBet + increment;     // Normal raise by one increment
         canRaise = effectiveStack > toCall;
-        minRaise = Math.min(raiseTo, player.bet + effectiveStack);
+        minRaise = Math.min(raiseTo, allInTo);
         maxRaise = minRaise; // Fixed: only one size
+        if (openPairChoice(state) && state.currentBet >= state.smallBet) {
+          raiseOptions = sizes([state.currentBet + state.smallBet, state.currentBet + state.bigBet], allInTo);
+          maxRaise = raiseOptions[raiseOptions.length - 1];
+        }
+      }
+
+      // An all-in of less than half a bet does not reopen the betting for a
+      // player who has already acted this round (Robert's Rules; spec §3).
+      if (canRaise) {
+        const round = state.actionHistory.slice(state.phaseStartActionIndex);
+        let lastOwn = -1;
+        round.forEach((a, i) => { if (a.playerId === player.id && a.betLevel !== undefined) lastOwn = i; });
+        if (lastOwn >= 0) {
+          const reopened = round.slice(lastOwn + 1)
+            .some(a => (a.type === 'bet' || a.type === 'raise') && a.fullRaise !== false);
+          if (!reopened) canRaise = false;
+        }
       }
       break;
     }
@@ -161,19 +197,30 @@ export function getAvailableActions(state: HandState): AvailableActions {
     canFold, canCheck, canCall, callAmount,
     canBet, minBet, maxBet,
     canRaise, minRaise, maxRaise,
+    ...(canBet && betOptions && betOptions.length > 1 ? { betOptions } : {}),
+    ...(canRaise && raiseOptions && raiseOptions.length > 1 ? { raiseOptions } : {}),
   };
+}
+
+/** Stud high, 4th street, open pair showing, big bet not yet made: small or big bet. */
+function openPairChoice(state: HandState): boolean {
+  return !!state.openPairFourth && state.phase === GamePhase.BettingFourth && !state.bigBetInForce;
 }
 
 /**
  * Get the fixed-limit bet increment based on the current street.
  * Early streets use small bet, later streets use big bet.
  */
-function getFixedLimitIncrement(state: HandState): number {
+export function getFixedLimitIncrement(state: HandState): number {
   // For Hold'em: preflop/flop = small bet, turn/river = big bet
   // For Stud: 3rd/4th = small bet, 5th/6th/7th = big bet
   // For Draw: post-draw-1 = small bet, post-draw-2/3 = big bet
   const bigBetPhases = ['turn', 'river', 'fifth', 'sixth', 'seventh', 'post-draw-2', 'post-draw-3'];
   if (bigBetPhases.includes(state.phase)) {
+    return state.bigBet;
+  }
+  // Stud high 4th street after an open-pair big bet: all raises are big bets
+  if (state.phase === GamePhase.BettingFourth && state.bigBetInForce) {
     return state.bigBet;
   }
   return state.smallBet;
@@ -184,10 +231,12 @@ function getFixedLimitIncrement(state: HandState): number {
  * Only counts from phaseStartActionIndex onward (current street only).
  */
 function countBetsThisRound(state: HandState): number {
-  let count = 0;
+  // Preflop (and the first round of draw games) the big blind is the opening bet.
+  let count = state.phase === GamePhase.BettingPreflop && state.bigBlind > 0 ? 1 : 0;
   for (let i = state.phaseStartActionIndex; i < state.actionHistory.length; i++) {
     const action = state.actionHistory[i];
-    if (action.type === 'bet' || action.type === 'raise') {
+    // Short all-ins under half a bet are not raises for the cap.
+    if ((action.type === 'bet' || action.type === 'raise') && action.fullRaise !== false) {
       count++;
     }
   }
@@ -204,7 +253,26 @@ import { Pot } from './types.js';
  * Collect bets from all players and create/update pots.
  * Handles side pot creation when players are all-in for different amounts.
  */
-export function collectBets(players: PlayerState[], existingPots: Pot[]): Pot[] {
+export function collectBets(
+  players: PlayerState[],
+  existingPots: Pot[],
+  onUncalled?: (playerId: string, amount: number) => void,
+): Pot[] {
+  // An unmatched bet goes straight back to its bettor before any pot is built.
+  // It was never called, so it is returned, not won (spec §3).
+  const ordered = players.filter(p => p.bet > 0).sort((a, b) => b.bet - a.bet);
+  if (ordered.length > 0) {
+    const top = ordered[0];
+    const uncalled = top.bet - (ordered[1]?.bet ?? 0);
+    if (uncalled > 0) {
+      top.bet -= uncalled;
+      top.totalBet -= uncalled;
+      top.chips += uncalled;
+      if (top.allIn && top.chips > 0) top.allIn = false;
+      onUncalled?.(top.id, uncalled);
+    }
+  }
+
   // Side pots are ONLY created by all-in differences, never by folds.
   // A folded player's money is dead in the pot — they just can't win it.
   // Eligibility here tracks who CAN win; folding is handled at showdown
@@ -269,26 +337,10 @@ export function collectBets(players: PlayerState[], existingPots: Pot[]): Pot[] 
     player.bet = 0;
   }
 
-  // Return uncallable excess: if any pot has only 1 eligible player, return the
-  // money to that player's stack. This happens when you bet more than the only
-  // remaining opponent can cover — the excess comes straight back, no side pot.
-  const finalPots: Pot[] = [];
-  for (const pot of newPots) {
-    if (pot.eligiblePlayerIds.length === 1 && pot.amount > 0.001) {
-      const player = players.find(p => p.id === pot.eligiblePlayerIds[0]);
-      if (player) {
-        player.chips += pot.amount;
-        if (player.allIn && player.chips > 0) {
-          player.allIn = false;
-        }
-      }
-    } else {
-      finalPots.push(pot);
-    }
-  }
-
-  // Filter out any pots with 0 or near-zero amount (floating point cleanup)
-  return finalPots.filter(p => p.amount > 0.001);
+  // The uncalled excess was already returned above. A pot with a single
+  // eligible player now only holds other players' dead money (folded chips
+  // above an all-in); it stays a pot and is awarded at the end of the hand.
+  return newPots.filter(p => p.amount > 0);
 }
 
 /**
@@ -305,6 +357,9 @@ export function validateAction(
   }
   if (amount !== undefined && (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0)) {
     return { valid: false, error: 'Amount must be a finite nonnegative number' };
+  }
+  if (amount !== undefined && !Number.isInteger(amount / CHIP_UNIT)) {
+    return { valid: false, error: `Amounts must be a multiple of ${CHIP_UNIT}` };
   }
   const player = state.players[state.activePlayerIndex];
   if (!player || player.id !== playerId) {
@@ -334,6 +389,9 @@ export function validateAction(
       if (amount === undefined) return { valid: false, error: 'Bet amount required' };
       if (amount < available.minBet) return { valid: false, error: `Minimum bet is ${available.minBet}` };
       if (amount > available.maxBet) return { valid: false, error: `Maximum bet is ${available.maxBet}` };
+      if (available.betOptions && !available.betOptions.includes(amount)) {
+        return { valid: false, error: `Bet must be ${available.betOptions.join(' or ')}` };
+      }
       return { valid: true, adjustedAmount: amount };
 
     case 'raise':
@@ -342,6 +400,9 @@ export function validateAction(
       // amount is the "raise TO" amount
       if (amount < available.minRaise) return { valid: false, error: `Minimum raise is to ${available.minRaise}` };
       if (amount > available.maxRaise) return { valid: false, error: `Maximum raise is to ${available.maxRaise}` };
+      if (available.raiseOptions && !available.raiseOptions.includes(amount)) {
+        return { valid: false, error: `Raise must be to ${available.raiseOptions.join(' or ')}` };
+      }
       return { valid: true, adjustedAmount: amount };
 
     default:

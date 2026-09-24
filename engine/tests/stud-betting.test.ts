@@ -12,6 +12,7 @@
 // - Chip conservation across full hands
 // - First actor position (lowest showing cards, not bring-in)
 
+import { startStud } from './helpers.js';
 import { describe, it, expect } from 'vitest';
 import { RazzGame } from '../src/games/razz.js';
 import {
@@ -74,7 +75,7 @@ describe('Ante Handling', () => {
   it('antes go to pot as dead money, not player.bet', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -102,7 +103,7 @@ describe('Ante Handling', () => {
   it('all active players contribute to ante pot', () => {
     const players = makePlayers(5);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -122,7 +123,7 @@ describe('Bring-in Mechanics', () => {
   it('correct player posts bring-in (highest door card)', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -140,7 +141,7 @@ describe('Bring-in Mechanics', () => {
   it('bring-in amount is in player.bet (not pot)', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -160,7 +161,7 @@ describe('Bring-in Mechanics', () => {
   it('currentBet is set to bring-in amount', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -171,7 +172,7 @@ describe('Bring-in Mechanics', () => {
   it('other players can call the bring-in', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -197,7 +198,7 @@ describe('Bring-in Mechanics', () => {
   it('other players can complete (raise to small bet) or raise more after bring-in', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
     const firstActorId = state.players[state.activePlayerIndex].id;
@@ -228,7 +229,7 @@ describe('Complete Action (Raise to Small Bet)', () => {
   it('after bring-in, next player can raise', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
     const firstActor = state.players[state.activePlayerIndex];
@@ -249,7 +250,7 @@ describe('Complete Action (Raise to Small Bet)', () => {
   it('bring-in player can act after others have bet', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -301,7 +302,7 @@ describe('Small Bet / Big Bet Transitions by Street', () => {
   it('3rd street uses small bet (5)', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -326,7 +327,7 @@ describe('Small Bet / Big Bet Transitions by Street', () => {
   it('4th street uses small bet (5)', () => {
     const players = makePlayers(3);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -373,7 +374,7 @@ describe('Per-Street 4-Bet Cap Reset', () => {
   it('multiway pots cap bet count per street', () => {
     const players = makePlayers(4, 5000); // 4 players = multiway
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -418,7 +419,7 @@ describe('Per-Street 4-Bet Cap Reset', () => {
   it('cap only applies to betting round, resets next street', () => {
     const players = makePlayers(3, 5000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -464,7 +465,7 @@ describe('Heads-Up Uncapped Betting', () => {
   it('with 2 players, playersAtStreetStart is 2', () => {
     const players = makePlayers(2, 5000); // 2 players only
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -476,7 +477,7 @@ describe('Heads-Up Uncapped Betting', () => {
   it('heads-up allows continuous raises (no cap for 2 players)', () => {
     const players = makePlayers(2, 5000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
     expect(state.playersAtStreetStart).toBe(2);
@@ -520,7 +521,7 @@ describe('Cap Only in Multiway', () => {
   it('multiway (4 players) applies cap', () => {
     const players = makePlayers(4, 5000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -531,7 +532,7 @@ describe('Cap Only in Multiway', () => {
   it('3 players is also multiway (cap applies)', () => {
     const players = makePlayers(3, 5000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     const state = game.getState();
 
@@ -550,7 +551,7 @@ describe('Chip Conservation', () => {
     const startTotal = 3000;
 
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -585,7 +586,7 @@ describe('Chip Conservation', () => {
     const startTotal = 3000;
 
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -626,7 +627,7 @@ describe('First Actor Position on Later Streets', () => {
   it('4th street sets first actor (should be determined by board)', () => {
     const players = makePlayers(3, 5000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -676,7 +677,7 @@ describe('Full Hand Integration', () => {
   it('can play a complete 3-player Razz hand', () => {
     const players = makePlayers(3, 1000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
     let moves = 0;
@@ -717,7 +718,7 @@ describe('Full Hand Integration', () => {
   it('2-player hand can reach showdown', () => {
     const players = makePlayers(2, 1000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
     let moves = 0;
@@ -765,7 +766,7 @@ describe('Bring-in Option Logic', () => {
     // Create a 3-player Razz game
     const players = makePlayers(3, 1000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
@@ -833,7 +834,7 @@ describe('Bring-in Option Logic', () => {
     // Create a 3-player Razz game
     const players = makePlayers(3, 1000);
     const game = new RazzGame(RAZZ_CONFIG, players, 0);
-    game.start();
+    startStud(game);
 
     let state = game.getState();
 
