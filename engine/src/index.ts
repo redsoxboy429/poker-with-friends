@@ -1,6 +1,7 @@
 // Poker Engine — Main Exports
 export * from './types.js';
 export * from './deck.js';
+export * from './presentation.js';
 export {
   combinations,
   evaluate5CardHigh,

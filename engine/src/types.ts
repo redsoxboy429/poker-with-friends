@@ -128,6 +128,8 @@ export enum ActionType {
 
 /** A player action */
 export interface PlayerAction {
+  /** Bet level after a voluntary action, used to determine whether raising reopened. */
+  betLevel?: number;
   type: ActionType;
   amount?: number;           // For bet/raise/call/all-in
   playerId: string;
@@ -187,6 +189,12 @@ export enum GamePhase {
 
 /** The full state of a hand in progress */
 export interface HandState {
+  /** Presentation checkpoint after betting closes, before runout and pot awards. */
+  showdownStart?: {
+    communityCardCount: number;
+    holeCardCounts: Record<string, number>;
+    chips: Record<string, number>;
+  };
   id: string;                     // Unique hand ID
   variant: GameVariant;
   bettingStructure: BettingStructure;

@@ -1,0 +1,225 @@
+[
+  {
+    "name": "R01: repeated action after completion pays the pot twice",
+    "expected": "Completed hands reject all betting actions.",
+    "observed": {
+      "before": 200,
+      "after": 204
+    }
+  },
+  {
+    "name": "R02: fold winner cards transmitted to opponent",
+    "expected": "Fold wins do not expose the winner hole cards.",
+    "observed": {
+      "winner": "p1",
+      "opponentReceivedHoleCards": [
+        {
+          "rank": 5,
+          "suit": "h"
+        },
+        {
+          "rank": 14,
+          "suit": "h"
+        }
+      ]
+    }
+  },
+  {
+    "name": "R03: all-in Drawmaha skips drawing",
+    "expected": "Both players retain their required draw decision.",
+    "observed": {
+      "phase": "complete",
+      "drawActions": 0,
+      "pots": []
+    }
+  },
+  {
+    "name": "R04: draw deck exhaustion",
+    "expected": "Legal full-table draws recycle eligible discards without losing cards.",
+    "observed": {
+      "error": "Deck exhausted — no cards remaining",
+      "cardCounts": [
+        5,
+        5,
+        5,
+        5,
+        5,
+        2
+      ]
+    }
+  },
+  {
+    "name": "R05: duplicate discard indices create a six-card hand",
+    "expected": "Discard indices must be unique integers and card count must remain five.",
+    "observed": {
+      "count": 6
+    }
+  },
+  {
+    "name": "R06: 2-7 wheel misclassified",
+    "expected": "Unsuited A2345 is ace-high, not a straight in deuce-to-seven.",
+    "observed": {
+      "value": 400726572,
+      "cards": [
+        {
+          "rank": 2,
+          "suit": "d"
+        },
+        {
+          "rank": 3,
+          "suit": "h"
+        },
+        {
+          "rank": 4,
+          "suit": "s"
+        },
+        {
+          "rank": 5,
+          "suit": "c"
+        },
+        {
+          "rank": 14,
+          "suit": "c"
+        }
+      ],
+      "description": "A-5-4-3-2 (straight)",
+      "qualified": true
+    }
+  },
+  {
+    "name": "R07: A-5 pairs/categories misranked",
+    "expected": "Any one-pair A-5 low beats quads.",
+    "observed": {
+      "quads": 100104866,
+      "pair": 100672332,
+      "incorrectWinner": "quad aces"
+    }
+  },
+  {
+    "name": "R08: Stud exposed pair loses first action to ace-high",
+    "expected": "Pair of deuces acts before unpaired AK in Stud.",
+    "observed": {
+      "firstActor": 1
+    }
+  },
+  {
+    "name": "R09: Razz showing hand orders by lowest rather than highest card",
+    "expected": "Exposed 23 acts before AK in Razz.",
+    "observed": {
+      "firstActor": 0
+    }
+  },
+  {
+    "name": "R10: Stud chooses an all-in player to act",
+    "expected": "All-in players receive cards but are skipped for betting.",
+    "observed": {
+      "firstActor": 0
+    }
+  },
+  {
+    "name": "R11: short all-in reopens NL betting",
+    "expected": "An incomplete raise does not reopen betting for a player who already acted.",
+    "observed": {
+      "active": "p0",
+      "canRaise": true
+    }
+  },
+  {
+    "name": "R12: NaN accepted as a raise",
+    "expected": "Non-finite and non-number amounts are rejected before mutation.",
+    "observed": {
+      "chipsCorrupted": true
+    }
+  },
+  {
+    "name": "R13: fractional-chip splitting changes total",
+    "expected": "Pot splitting conserves chips exactly; invalid denominations are rejected.",
+    "observed": {
+      "pot": 1.1,
+      "halves": [
+        0.5,
+        0.5
+      ],
+      "total": 1
+    }
+  },
+  {
+    "name": "R14: host can replace a live hand",
+    "expected": "startHand is rejected while the current hand is active.",
+    "observed": {
+      "first": "hand_1789658960714_9419",
+      "second": "hand_1789658960714_2894",
+      "replaced": true
+    }
+  },
+  {
+    "name": "R15: non-chooser can select a DC game",
+    "expected": "Only the designated chooser can pick, once per choice window.",
+    "observed": {
+      "designatedChooser": "p0",
+      "acceptedPicker": "p1",
+      "phase": "preflop"
+    }
+  },
+  {
+    "name": "R16: DC breaks when seats are not contiguous",
+    "expected": "Choice uses stable player identity rather than indexing occupied seats as physical seats.",
+    "observed": {
+      "activeSeats": [
+        1,
+        2
+      ],
+      "errors": [
+        {
+          "type": "sendError",
+          "args": [
+            "s0",
+            "No variant selected"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "R17: disconnected player stalls later action",
+    "expected": "Leaving off-turn cannot leave the hand waiting for a departed player.",
+    "observed": {
+      "actor": "p1",
+      "hasRoomPlayer": false
+    }
+  },
+  {
+    "name": "R18: queued target stack can erase winnings",
+    "expected": "A queued add-on preserves won chips and has explicit top-up semantics.",
+    "observed": {
+      "settledStackBefore": 200,
+      "queuedTarget": 150,
+      "stackAtNextDeal": 150
+    }
+  },
+  {
+    "name": "R19: zero-stack players are dealt in",
+    "expected": "A busted player waits to rebuy and cannot stall forced-bet handling.",
+    "observed": {
+      "phase": "preflop",
+      "allPlayersAllIn": true,
+      "actor": 1
+    }
+  },
+  {
+    "name": "R20: room destruction leaves controller alive",
+    "expected": "Destroying a room also destroys its game and timers.",
+    "observed": {
+      "roomGone": true,
+      "controllerStillHasGame": true
+    }
+  },
+  {
+    "name": "R21: reconnect can be claimed using only display name",
+    "expected": "A rejoin requires a private player/session token.",
+    "observed": {
+      "claimedPlayer": "p1",
+      "credentialRequired": false
+    }
+  }
+]

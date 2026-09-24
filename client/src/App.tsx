@@ -6,6 +6,7 @@ import {
   isDrawGame,
   isDrawmahaGame,
   getBotDiscardIndices,
+  PLAYABLE_VARIANTS,
   GameVariant,
   GamePhase,
   ActionType,
@@ -819,7 +820,7 @@ export default function App() {
             return;
           } else {
             // Bot picks randomly
-            const allVariants = Object.values(GameVariant);
+            const allVariants = PLAYABLE_VARIANTS;
             const pick = allVariants[Math.floor(Math.random() * allVariants.length)];
             session.setDealersChoice(pick, buttonIndex % numPlayers);
             addLog(`--- ${playersRef.current[sessionState.chooserSeatIndex]?.name ?? 'Bot'} picks ${VARIANT_LABELS[pick]} ---`);
@@ -842,7 +843,7 @@ export default function App() {
             addLog("--- Your pick! Choose the game. ---");
             return;
           } else {
-            const allVariants = Object.values(GameVariant);
+            const allVariants = PLAYABLE_VARIANTS;
             const pick = allVariants[Math.floor(Math.random() * allVariants.length)];
             session.setDealersChoice(pick, buttonIndex % numPlayers);
             addLog(`--- ${playersRef.current[sessionState.chooserSeatIndex]?.name ?? 'Bot'} picks ${VARIANT_LABELS[pick]} ---`);
@@ -1513,7 +1514,7 @@ export default function App() {
               <div className="flex flex-col items-center gap-3 bg-slate-900/80 border border-amber-500/40 rounded-lg p-5 max-w-sm pointer-events-auto">
                 <h2 className="text-sm font-bold text-amber-400">Your Pick — Choose the Game</h2>
                 <div className="grid grid-cols-2 gap-1.5 w-full">
-                  {Object.values(GameVariant).map((v) => (
+                  {PLAYABLE_VARIANTS.map((v) => (
                     <button key={v} onClick={() => handleDcPick(v)}
                       className="py-2 px-3 rounded text-xs font-medium bg-slate-800 text-slate-300 hover:bg-amber-600 hover:text-white transition-colors"
                     >{VARIANT_LABELS[v]}</button>

@@ -34,7 +34,7 @@ function isShowdown(phase: GamePhase): boolean {
  */
 export function getPlayerView(state: HandState, playerId: string): PlayerView {
   const isStud = STUD_VARIANTS.has(state.variant);
-  const showAll = isShowdown(state.phase);
+  const showAll = isShowdown(state.phase) && state.players.filter(p => !p.folded && !p.sittingOut).length > 1;
 
   const filteredPlayers: PlayerStateView[] = state.players.map(player => {
     // Own cards — always visible

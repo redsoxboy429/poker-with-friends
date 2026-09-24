@@ -147,12 +147,33 @@ export abstract class BaseGame {
 
   /** Start the hand: post blinds/antes, deal initial cards */
   start(): void {
+    if (this.state.phase !== GamePhase.Waiting) throw new Error('Hand has already started');
+    if (this.state.players.some(p => !p.sittingOut && (!Number.isFinite(p.chips) || p.chips <= 0))) {
+      throw new Error('Active players must have a positive finite stack');
+    }
     if (this.state.players.filter(p => !p.sittingOut).length < 2) {
       throw new Error('Need at least 2 active players to start a hand');
     }
     this.postForcedBets();
     this.dealInitialCards();
     this.setFirstActor();
+    const canAct = this.state.players.filter(p => !p.sittingOut && !p.folded && !p.allIn);
+    if (canAct.length <= 1 && (!canAct.length || canAct[0].bet >= this.state.currentBet)) {
+      this.state.pots = collectBets(this.state.players, this.state.pots);
+      this.state.currentBet = 0;
+      if (this.shouldRunoutOnAllIn()) {
+        this.captureShowdownStart();
+        this.dealRemainingCards();
+        this.resolveShowdown();
+      } else {
+        this.state.phase = this.getNextPhase();
+        this.phaseStartActionIndex = this.state.actionHistory.length;
+        this.dealPhaseCards(this.state.phase);
+        this.setFirstActorForStreet();
+      }
+    } else if (canAct.length === 1) {
+      this.state.activePlayerIndex = this.state.players.indexOf(canAct[0]);
+    }
   }
 
   /**
@@ -213,6 +234,7 @@ export abstract class BaseGame {
       }
     }
 
+    action.betLevel = this.state.currentBet;
     this.state.actionHistory.push(action);
 
     // Check if hand is over (only one player left)
@@ -233,6 +255,7 @@ export abstract class BaseGame {
       const canAct = activePlayers.filter(p => !p.allIn);
       if (canAct.length <= 1 && activePlayers.some(p => p.allIn) && this.shouldRunoutOnAllIn()) {
         // Run out remaining board and go to showdown
+        this.captureShowdownStart();
         this.dealRemainingCards();
         return this.resolveShowdown();
       }
@@ -446,9 +469,19 @@ export abstract class BaseGame {
   }
 
   /** Resolve showdown: evaluate hands and distribute pots */
+  private captureShowdownStart(): void {
+    this.state.showdownStart ??= {
+      communityCardCount: this.state.communityCards.length,
+      holeCardCounts: Object.fromEntries(this.state.players.map(p => [p.id, p.folded ? 0 : p.holeCards.length])),
+      chips: Object.fromEntries(this.state.players.map(p => [p.id, p.chips])),
+    };
+  }
+
   protected resolveShowdown(): boolean {
+    if (this.state.phase === GamePhase.Complete) return true;
     // Collect any outstanding bets and merge pots with identical active contenders
     this.state.pots = collectBets(this.state.players, this.state.pots);
+    this.captureShowdownStart();
     this.state.phase = GamePhase.Showdown;
 
     const activePlayers = this.state.players.filter(p => !p.folded && !p.sittingOut);

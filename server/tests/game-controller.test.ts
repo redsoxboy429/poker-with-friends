@@ -164,6 +164,7 @@ describe('GameController: Hand lifecycle', () => {
     const activeSocket = [...room.players.values()].find(p => p.playerId === activePlayer.id)!.socketId;
     gc.handleAction(activeSocket, ActionType.Fold);
 
+    vi.advanceTimersByTime(200); // Fold-win presentation finishes before countdown.
     // Should have broadcast initial countdown
     expect(cb.countdowns.length).toBeGreaterThan(0);
     expect(cb.countdowns[0]).toBe(15); // 15 second countdown
@@ -190,7 +191,7 @@ describe('GameController: Hand lifecycle', () => {
     cb.handStates.length = 0;
 
     // Advance full countdown (15 seconds)
-    vi.advanceTimersByTime(15000);
+    vi.advanceTimersByTime(15200);
 
     // New hand should have been dealt (new hand-state broadcasts)
     expect(cb.handStates.length).toBeGreaterThan(0);

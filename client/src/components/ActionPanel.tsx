@@ -31,8 +31,8 @@ export function ActionPanel({
 
   const isBetting = actions.canBet && !isFixedLimit && actions.minBet < actions.maxBet;
   const isRaising = actions.canRaise && !isFixedLimit && actions.minRaise < actions.maxRaise;
-  const sizeMin = isBetting ? actions.minBet : (isRaising ? actions.minRaise : 0);
-  const sizeMax = isBetting ? actions.maxBet : (isRaising ? actions.maxRaise : 0);
+  const sizeMin = actions.canBet ? actions.minBet : (actions.canRaise ? actions.minRaise : 0);
+  const sizeMax = actions.canBet ? actions.maxBet : (actions.canRaise ? actions.maxRaise : 0);
 
   const [raiseAmount, setRaiseAmount] = useState(sizeMin);
   const [inputText, setInputText] = useState(String(sizeMin));

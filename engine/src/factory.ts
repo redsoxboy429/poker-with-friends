@@ -73,6 +73,6 @@ export function createGame(
     case GameVariant.PLArchieDD: return new PLArchieDDGame(config, players, buttonIndex);
     case GameVariant.PLTenThirtyDD: return new PLTenThirtyDDGame(config, players, buttonIndex);
     case GameVariant.LimitOmahaHigh: return new LimitOmahaHighGame(config, players, buttonIndex);
-    default: return new NLHGame(config, players, buttonIndex);
+    default: throw new Error(`Unknown game variant: ${variant}`);
   }
 }

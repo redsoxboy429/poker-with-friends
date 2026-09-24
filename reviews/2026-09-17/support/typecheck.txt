@@ -1,0 +1,175 @@
+client/src/App.tsx(34,1): error TS6133: 'WinEntry' is declared but its value is never read.
+client/src/App.tsx(357,10): error TS6133: 'isAnimating' is declared but its value is never read.
+client/src/App.tsx(728,23): error TS6133: 'done' is declared but its value is never read.
+client/src/App.tsx(825,46): error TS2538: Type 'null' cannot be used as an index type.
+client/src/App.tsx(848,46): error TS2538: Type 'null' cannot be used as an index type.
+client/src/constants.ts(9,3): error TS6133: 'BettingStructure' is declared but its value is never read.
+client/src/engine-wrapper.ts(10,1): error TS6133: 'createGame' is declared but its value is never read.
+client/src/engine-wrapper.ts(411,3): error TS6133: 'state' is declared but its value is never read.
+client/src/MultiplayerTable.tsx(12,23): error TS6133: 'GamePhase' is declared but its value is never read.
+client/src/MultiplayerTable.tsx(13,1): error TS6133: 'AvailableActions' is declared but its value is never read.
+client/src/MultiplayerTable.tsx(98,10): error TS6133: 'isAnimating' is declared but its value is never read.
+client/src/MultiplayerTable.tsx(979,15): error TS2322: Type 'PlayerStateView' is not assignable to type 'PlayerState'.
+  Types of property 'holeCards' are incompatible.
+    Type '(Card | null)[]' is not assignable to type 'Card[]'.
+      Type 'Card | null' is not assignable to type 'Card'.
+        Type 'null' is not assignable to type 'Card'.
+engine/src/betting.ts(9,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/betting.ts(10,3): error TS1484: 'AvailableActions' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/betting.ts(11,3): error TS1484: 'HandState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/betting.ts(176,10): error TS1484: 'Pot' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/deck.ts(8,10): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/deck.ts(21,29): error TS2591: Cannot find name 'require'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+engine/src/evaluator.ts(15,10): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/evaluator.ts(15,22): error TS6133: 'Suit' is declared but its value is never read.
+engine/src/evaluator.ts(15,42): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/evaluator.ts(15,54): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/evaluator.ts(15,69): error TS6133: 'cardToString' is declared but its value is never read.
+engine/src/evaluator.ts(110,7): error TS6133: 'CATEGORY_NAMES' is declared but its value is never read.
+engine/src/games/27sd.ts(14,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/27sd.ts(14,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/27sd.ts(14,67): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/27td.ts(12,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/27td.ts(12,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/27td.ts(12,67): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/archie.ts(3,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/archie.ts(4,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/archie.ts(7,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/archie.ts(8,3): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/archie.ts(10,3): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badacey.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badacey.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badacey.ts(2,67): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badacey.ts(2,79): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badacey.ts(2,94): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badeucy.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badeucy.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badeucy.ts(2,67): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badeucy.ts(2,79): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badeucy.ts(2,94): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badugi.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badugi.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badugi.ts(2,67): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/badugi.ts(2,79): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(10,3): error TS1484: 'HandState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(11,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(13,3): error TS1484: 'PlayerAction' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(15,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(16,3): error TS1484: 'Pot' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(17,3): error TS1484: 'PotResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(17,3): error TS6133: 'PotResult' is declared but its value is never read.
+engine/src/games/base.ts(18,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(19,3): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(20,3): error TS6133: 'BettingStructure' is declared but its value is never read.
+engine/src/games/base.ts(21,3): error TS1484: 'AvailableActions' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/base.ts(144,39): error TS6133: 'player' is declared but its value is never read.
+engine/src/games/base.ts(304,29): error TS6133: 'player' is declared but its value is never read.
+engine/src/games/draw-base.ts(17,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/draw-base.ts(18,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/draw-base.ts(19,3): error TS6133: 'BettingStructure' is declared but its value is never read.
+engine/src/games/draw-base.ts(20,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/draw-base.ts(22,1): error TS6133: 'collectBets' is declared but its value is never read.
+engine/src/games/drawmaha-27.ts(12,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-27.ts(13,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-27.ts(14,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-27.ts(15,3): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-49.ts(14,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-49.ts(15,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-49.ts(16,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-49.ts(17,3): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-a5.ts(12,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-a5.ts(13,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-a5.ts(14,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-a5.ts(15,3): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-base.ts(21,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-base.ts(22,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-base.ts(24,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-base.ts(25,3): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-base.ts(36,11): error TS6133: 'drawCompleted' is declared but its value is never read.
+engine/src/games/drawmaha-high.ts(12,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-high.ts(13,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-high.ts(14,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/drawmaha-high.ts(15,3): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/flop-base.ts(20,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/flop-base.ts(20,3): error TS6133: 'HandResult' is declared but its value is never read.
+engine/src/games/flop-base.ts(21,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/flop-base.ts(22,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/flop-base.ts(23,3): error TS6133: 'BettingStructure' is declared but its value is never read.
+engine/src/games/lhe.ts(10,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/lhe.ts(11,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/lhe.ts(12,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/limit-omaha-high.ts(2,10): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/limit-omaha-high.ts(2,22): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/limit-omaha-high.ts(2,35): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/limit-omaha-high.ts(2,66): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/nlh.ts(9,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/nlh.ts(10,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/nlh.ts(11,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/o8.ts(11,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/o8.ts(12,3): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/o8.ts(13,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/o8.ts(14,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-archie-dd.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-archie-dd.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-archie-dd.ts(2,54): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-archie-dd.ts(2,66): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-archie-dd.ts(2,95): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badacey-dd.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badacey-dd.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badacey-dd.ts(2,54): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badacey-dd.ts(2,66): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badacey-dd.ts(2,81): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badeucy-dd.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badeucy-dd.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badeucy-dd.ts(2,54): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badeucy-dd.ts(2,66): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badeucy-dd.ts(2,81): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badugi-dd.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badugi-dd.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badugi-dd.ts(2,54): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-badugi-dd.ts(2,66): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-ten-thirty-dd.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-ten-thirty-dd.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-ten-thirty-dd.ts(2,54): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-ten-thirty-dd.ts(2,66): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/pl-ten-thirty-dd.ts(2,81): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/plo.ts(10,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/plo.ts(11,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/plo.ts(12,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/plo8.ts(10,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/plo8.ts(11,3): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/plo8.ts(12,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/plo8.ts(13,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/razz.ts(11,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/razz.ts(13,3): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/razz.ts(14,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/razz.ts(15,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/razz.ts(17,3): error TS6133: 'Rank' is declared but its value is never read.
+engine/src/games/razz.ts(52,11): error TS6133: 'activePlayers' is declared but its value is never read.
+engine/src/games/stud-base.ts(16,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud-base.ts(17,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud-base.ts(18,3): error TS1484: 'HandState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud-base.ts(19,3): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud-base.ts(58,13): error TS6133: 'down' is declared but its value is never read.
+engine/src/games/stud-hilo.ts(13,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud-hilo.ts(14,3): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud-hilo.ts(15,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud-hilo.ts(16,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud.ts(11,3): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud.ts(12,3): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud.ts(13,3): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/stud.ts(34,11): error TS6133: 'activePlayers' is declared but its value is never read.
+engine/src/games/ten-thirty.ts(2,10): error TS1484: 'PlayerState' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/ten-thirty.ts(2,23): error TS1484: 'TableConfig' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/ten-thirty.ts(2,67): error TS1484: 'HandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/ten-thirty.ts(2,79): error TS1484: 'LowHandResult' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/games/ten-thirty.ts(2,94): error TS1484: 'Card' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+engine/src/session.ts(8,13): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+engine/src/session.ts(180,15): error TS6133: 'buttonIndex' is declared but its value is never read.
+engine/src/types.ts(6,13): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+engine/src/types.ts(14,13): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+engine/src/types.ts(37,13): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+engine/src/types.ts(75,13): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+engine/src/types.ts(82,13): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+engine/src/types.ts(115,13): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+engine/src/types.ts(160,13): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.

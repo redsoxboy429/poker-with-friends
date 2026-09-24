@@ -302,14 +302,13 @@ export function evaluate5CardLow(cards: Card[]): LowHandResult {
   // Encode highest-to-lowest so that [5,4,3,2,1] < [6,4,3,2,1]
   const descending = [...sorted].reverse();
 
-  let value: number;
-  if (hasPair) {
-    // Hands with pairs are worse than all non-pair hands
-    // Add a large penalty, then encode normally
-    value = 100_000_000 + encodeKickers(descending);
-  } else {
-    value = encodeKickers(descending);
-  }
+  const counts = new Map<number, number>();
+  for (const rank of lowRanks) counts.set(rank, (counts.get(rank) ?? 0) + 1);
+  const groups = [...counts].sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+  const pattern = groups.map(g => g[1]).join(',');
+  const tier = pattern === '4,1' ? 5 : pattern === '3,2' ? 4 : pattern === '3,1,1' ? 3
+    : pattern === '2,2,1' ? 2 : hasPair ? 1 : 0;
+  const value = tier * 100_000_000 + encodeKickers(hasPair ? groups.map(g => g[0]) : descending);
 
   const description = sortedCards
     .map(c => c.rank === Rank.Ace ? 'A' : (c.rank <= 10 ? String(c.rank) : ({ 11: 'J', 12: 'Q', 13: 'K' } as Record<number, string>)[c.rank]))
@@ -413,7 +412,7 @@ export function bestPLOEightOrBetterLow(holeCards: Card[], boardCards: Card[]): 
 // - Aces are ALWAYS HIGH (rank 14) — worst low card
 // - Straights and flushes COUNT AGAINST you (they're bad)
 // - Best hand: 2-3-4-5-7 (not suited, no straight)
-// - A-2-3-4-5 is a straight (ace-high) — very bad
+// - A-2-3-4-5 is ace-high, NOT a straight
 //
 // Hand ranking tiers from BEST to WORST (exact reverse of high poker):
 //   Tier 0: High card (no pair, no straight, no flush) — BEST
@@ -491,11 +490,7 @@ export function evaluate5Card27Low(cards: Card[]): LowHandResult {
     if (sorted[4] - sorted[0] === 4) {
       isStraight = true;
     }
-    // Ace-high wrap: A-2-3-4-5 is a straight in 2-7 (sorted = [2,3,4,5,14])
-    if (!isStraight && sorted[4] === Rank.Ace &&
-        sorted[0] === 2 && sorted[1] === 3 && sorted[2] === 4 && sorted[3] === 5) {
-      isStraight = true;
-    }
+
   }
 
   // Determine tier (reverse of high poker)

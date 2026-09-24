@@ -240,12 +240,17 @@ export abstract class BaseDrawGame extends BaseGame {
       throw new Error('Player cannot draw (folded or sitting out)');
     }
 
-    // Validate card indices are in range
+    if (!Array.isArray(cardIndices) || new Set(cardIndices).size !== cardIndices.length) {
+      throw new Error('Discard indices must be a unique array');
+    }
+    // Validate the whole request before changing cards or action history.
     for (const idx of cardIndices) {
-      if (idx < 0 || idx >= player.holeCards.length) {
+      if (!Number.isInteger(idx) || idx < 0 || idx >= player.holeCards.length) {
         throw new Error(`Invalid card index: ${idx}`);
       }
     }
+
+    const replacements = this.deck.exchange(cardIndices.map(i => player.holeCards[i]));
 
     // Record the action
     const actionType = cardIndices.length === 0 ? ActionType.StandPat : ActionType.Discard;
@@ -262,9 +267,7 @@ export abstract class BaseDrawGame extends BaseGame {
     }
 
     // Deal replacement cards
-    for (let i = 0; i < cardIndices.length; i++) {
-      player.holeCards.push(this.deck.deal());
-    }
+    player.holeCards.push(...replacements);
 
     // Find the next player who needs to draw (includes all-in players)
     const nextDrawer = this.findNextDrawer(this.state.activePlayerIndex);

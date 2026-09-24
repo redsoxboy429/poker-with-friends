@@ -1,3 +1,5 @@
+import { planShowdown } from '@engine/presentation.ts';
+import { PLAYABLE_VARIANTS } from './engine-wrapper';
 // ============================================================
 // MultiplayerTable — App.tsx rendering + socket integration
 // ============================================================
@@ -9,8 +11,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSocket } from './useSocket';
-import { GameVariant, GamePhase, ActionType, GameMode } from './engine-wrapper';
-import type { AvailableActions } from './engine-wrapper';
+import { GameVariant, ActionType, GameMode } from './engine-wrapper';
 import {
   CardDisplay,
   PlayerSeat,
@@ -30,8 +31,6 @@ import {
   BET_OFFSETS,
   DRAW_PHASES,
   CARD_DEAL_INTERVAL,
-  SHOWDOWN_DELAY,
-  ALLIN_STREET_PAUSE,
   formatActionType,
 } from './constants';
 
@@ -247,14 +246,8 @@ export default function MultiplayerTable() {
       return;
     }
 
-    // Detect new hand — either first state ever (prev === null) OR prev hand
-    // was at showdown/complete and we've transitioned to an active phase.
-    // The latter case fixes a race condition where the showdown-clear useEffect
-    // would reset prevHandRef AFTER this effect already ran with stale prev data,
-    // causing hand 2+ to skip the deal animation until the first action arrived.
-    const isNewHandTransition = !!prev &&
-      (prev.phase === 'complete' || prev.phase === 'showdown') &&
-      curr.phase !== 'complete' && curr.phase !== 'showdown';
+    // Completion arrives separately; compare IDs instead of assuming a prior Complete phase.
+    const isNewHandTransition = !!prev && prev.id !== curr.id;
 
     if (!prev || isNewHandTransition) {
       clearAnimTimers();
@@ -353,11 +346,13 @@ export default function MultiplayerTable() {
     const nonFolded = finalState.players.filter(p => !p.folded).length;
     const isReal = nonFolded > 1;
 
-    // Snap card counts immediately (FROM App.tsx lines 581-587)
+    clearAnimTimers();
+    const plan = planShowdown(finalState);
+    // Reveal surviving hands, retaining only cards dealt before the runout.
     // Folded players → 0 (cards disappear), others → full count
     const snappedCounts: Record<string, number> = {};
     for (const p of finalState.players) {
-      snappedCounts[p.id] = p.folded ? 0 : p.holeCards.length;
+      snappedCounts[p.id] = p.folded ? 0 : (finalState.showdownStart?.holeCardCounts[p.id] ?? p.holeCards.length);
     }
     updateDealtCardCounts(snappedCounts);
 
@@ -373,13 +368,13 @@ export default function MultiplayerTable() {
       }
     }
 
-    // Check for unrevealed community cards — all-in runout (FROM App.tsx lines 570-573)
-    const currentVisible = visibleCommunityCountRef.current;
     const totalCommunity = finalState.communityCards.length;
-    const hasRunout = totalCommunity > currentVisible && isReal;
+    updateVisibleCommunity(finalState.showdownStart?.communityCardCount ?? totalCommunity);
 
     // finishShowdown callback (FROM App.tsx lines 589-622)
     const finishShowdown = () => {
+      setIsAnimating(false);
+      setIsAllInRunout(false);
       setShowdown(true);
       setIsRealShowdown(isReal);
       setWinInfo(socketState.winners!.map(w => ({
@@ -394,51 +389,23 @@ export default function MultiplayerTable() {
       addLog('--- Hand complete ---');
     };
 
-    if (hasRunout) {
-      // All-in runout animation (FROM App.tsx lines 624-671)
-      const streets: Array<[number, number]> = [];
-      let from = currentVisible;
-      if (from === 0 && totalCommunity >= 3) {
-        streets.push([0, 3]); from = 3;
-      }
-      while (from < totalCommunity) {
-        streets.push([from, from + 1]); from++;
-      }
-      if (streets.length === 0) { finishShowdown(); return; }
-
-      let totalDelay = ALLIN_STREET_PAUSE;
-      setIsAnimating(true);
-      setIsAllInRunout(true);
-
-      for (let s = 0; s < streets.length; s++) {
-        const [streetFrom, streetTo] = streets[s];
-        const isLast = s === streets.length - 1;
-        const streetDelay = totalDelay;
-
-        for (let c = streetFrom; c < streetTo; c++) {
-          const cardDelay = streetDelay + (c - streetFrom) * CARD_DEAL_INTERVAL;
-          const t = setTimeout(() => updateVisibleCommunity(c + 1), cardDelay);
-          animTimersRef.current.push(t);
+    setIsAnimating(true);
+    setIsAllInRunout(plan.steps.length > 0);
+    setStudForceDown(false);
+    for (const step of plan.steps) {
+      const timer = setTimeout(() => {
+        if (step.communityCount !== undefined) updateVisibleCommunity(step.communityCount);
+        if (step.playerId !== undefined && step.holeCardCount !== undefined) {
+          updateDealtCardCounts(counts => ({ ...counts, [step.playerId!]: step.holeCardCount! }));
         }
-
-        const streetDoneDelay = streetDelay + (streetTo - streetFrom) * CARD_DEAL_INTERVAL;
-        if (isLast) {
-          const t = setTimeout(() => {
-            setIsAnimating(false);
-            setIsAllInRunout(false);
-            finishShowdown();
-          }, streetDoneDelay + SHOWDOWN_DELAY);
-          animTimersRef.current.push(t);
-        }
-        totalDelay = streetDoneDelay + ALLIN_STREET_PAUSE;
-      }
-    } else {
-      // Normal showdown or fold-win (FROM App.tsx lines 672-679)
-      const delay = isReal ? SHOWDOWN_DELAY : 200;
-      const t = setTimeout(finishShowdown, delay);
-      animTimersRef.current.push(t);
+      }, step.atMs);
+      animTimersRef.current.push(timer);
     }
-  }, [socketState.winners, socketState.finalState, socketState.lastAction, addLog, updateVisibleCommunity, updateDealtCardCounts]);
+    animTimersRef.current.push(setTimeout(finishShowdown, plan.durationMs));
+    return clearAnimTimers;
+  }, [socketState.winners, socketState.finalState, socketState.lastAction, addLog, updateVisibleCommunity, updateDealtCardCounts, clearAnimTimers]);
+
+  useEffect(() => () => clearAnimTimers(), [clearAnimTimers]);
 
   // Clear showdown on new hand (when new hand-state arrives with non-complete phase)
   // CRITICAL: only clear when finalState is null — otherwise we're still in the completed hand.
@@ -550,7 +517,10 @@ export default function MultiplayerTable() {
   // ============================================================
 
   // Use finalState as soon as it arrives (shows folds, final board immediately)
-  const gameState = socketState.finalState ?? socketState.handState;
+  const receivedState = socketState.finalState ?? socketState.handState;
+  const gameState = receivedState?.showdownStart && !showdown
+    ? { ...receivedState, players: receivedState.players.map(p => ({ ...p, chips: receivedState.showdownStart!.chips[p.id] ?? p.chips })) }
+    : receivedState;
   const roomState = socketState.roomState;
   const myId = socketState.yourPlayerId;
 
@@ -712,6 +682,8 @@ export default function MultiplayerTable() {
       <header className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-bold text-white">Room {roomState.code}</h1>
+          {socketState.isHost && <button onClick={() => socketState.countdown === -1 ? socketActions.resumeCountdown() : socketActions.pauseCountdown()}
+            className="text-xs text-amber-300">{socketState.countdown === -1 ? 'Resume table' : 'Pause table'}</button>}
           {gameState && (
             <span className="text-xs text-emerald-400 font-medium">
               {VARIANT_LABELS[gameState.variant] || gameState.variant}
@@ -873,7 +845,7 @@ export default function MultiplayerTable() {
               <div className="mb-4">
                 <label className="text-xs text-slate-400 block mb-1">Variant</label>
                 <div className="grid grid-cols-2 gap-1 max-h-48 overflow-y-auto">
-                  {Object.values(GameVariant).map(v => (
+                  {PLAYABLE_VARIANTS.map(v => (
                     <button key={v} onClick={() => setMenuVariant(v)}
                       className={`py-1.5 px-2 rounded text-[11px] font-medium transition-colors ${
                         menuVariant === v ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
@@ -1052,7 +1024,7 @@ export default function MultiplayerTable() {
           <div className="bg-slate-900/95 border border-amber-500/40 rounded-lg p-5 max-w-sm shadow-2xl">
             <h2 className="text-sm font-bold text-amber-400 mb-3 text-center">Your Pick — Choose the Game</h2>
             <div className="grid grid-cols-2 gap-1.5 w-full max-h-[60vh] overflow-y-auto">
-              {Object.values(GameVariant).map(v => (
+              {PLAYABLE_VARIANTS.map(v => (
                 <button key={v} onClick={() => handleDcPick(v)}
                   className="py-2 px-3 rounded text-xs font-medium bg-slate-800 text-slate-300 hover:bg-amber-600 hover:text-white transition-colors"
                 >{VARIANT_LABELS[v]}</button>
@@ -1073,7 +1045,7 @@ export default function MultiplayerTable() {
 
       {/* ======== Bottom Bar — Actions (FROM App.tsx lines 1630-1704, multiplayer version) ======== */}
       <div className="flex-shrink-0 px-4 pb-3 pt-1">
-        {isDrawPhase && socketState.isYourTurn && gameState ? (
+        {isDrawPhase && socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && gameState ? (
           <div className="flex flex-wrap items-center gap-2 justify-center">
             <span className="text-xs text-slate-400">Click cards to select for discard, then:</span>
             <button onClick={handleDiscard}
@@ -1081,7 +1053,7 @@ export default function MultiplayerTable() {
               {selectedDiscardIndices.size === 0 ? 'Stand Pat' : `Draw ${selectedDiscardIndices.size}`}
             </button>
           </div>
-        ) : socketState.isYourTurn && socketState.availableActions && gameState ? (
+        ) : socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && socketState.availableActions && gameState ? (
           <ActionPanel
             actions={socketState.availableActions}
             onAction={handleAction}

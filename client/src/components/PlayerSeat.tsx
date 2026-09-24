@@ -24,7 +24,7 @@ export function PlayerSeat({
   forceAllDown,
   handDescription,
 }: {
-  player: PlayerState;
+  player: Omit<PlayerState, 'holeCards'> & { holeCards: (PlayerState['holeCards'][number] | null)[] };
   isActive: boolean;
   isDealer: boolean;
   isHuman: boolean;

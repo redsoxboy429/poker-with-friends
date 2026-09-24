@@ -1,0 +1,44 @@
+
+> client@0.0.0 lint
+> eslint .
+
+
+C:\Users\redso\Documents\ChatGPT\poker-with-friends\client\src\App.tsx
+    34:15  error    'WinEntry' is defined but never used                                                                                                                       @typescript-eslint/no-unused-vars
+   357:10  error    'isAnimating' is assigned a value but never used                                                                                                           @typescript-eslint/no-unused-vars
+   728:23  error    'done' is assigned a value but never used                                                                                                                  @typescript-eslint/no-unused-vars
+   794:5   warning  React Hook useCallback has missing dependencies: 'updateDealtCardCounts' and 'updateVisibleCommunity'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+   974:6   warning  React Hook useCallback has a missing dependency: 'updateVisibleCommunity'. Either include it or remove the dependency array                                react-hooks/exhaustive-deps
+  1175:6   warning  React Hook useCallback has a missing dependency: 'updateVisibleCommunity'. Either include it or remove the dependency array                                react-hooks/exhaustive-deps
+
+C:\Users\redso\Documents\ChatGPT\poker-with-friends\client\src\LobbyPage.tsx
+  49:6  warning  React Hook useEffect has a missing dependency: 'socketActions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\redso\Documents\ChatGPT\poker-with-friends\client\src\MultiplayerTable.tsx
+   12:23  error    'GamePhase' is defined but never used                                                                                                        @typescript-eslint/no-unused-vars
+   13:15  error    'AvailableActions' is defined but never used                                                                                                 @typescript-eslint/no-unused-vars
+   98:10  error    'isAnimating' is assigned a value but never used                                                                                             @typescript-eslint/no-unused-vars
+  176:46  error    Unexpected any. Specify a different type                                                                                                     @typescript-eslint/no-explicit-any
+  237:6   warning  React Hook useEffect has missing dependencies: 'socketActions' and 'socketState.status'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\redso\Documents\ChatGPT\poker-with-friends\client\src\components\Chips.tsx
+  14:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\redso\Documents\ChatGPT\poker-with-friends\client\src\constants.ts
+  9:3  error  'BettingStructure' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\redso\Documents\ChatGPT\poker-with-friends\client\src\engine-wrapper.ts
+  10:10  error  'createGame' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\redso\Documents\ChatGPT\poker-with-friends\client\src\useSocket.ts
+  107:244  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 16 problems (11 errors, 5 warnings)
+
+npm error Lifecycle script `lint` failed with error:
+npm error code 1
+npm error path C:\Users\redso\Documents\ChatGPT\poker-with-friends\client
+npm error workspace client@0.0.0
+npm error location C:\Users\redso\Documents\ChatGPT\poker-with-friends\client
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c eslint .

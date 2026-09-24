@@ -84,12 +84,8 @@ describe('evaluate5CardLow — Ace ordering edge cases', () => {
   it('trips in a low hand (dead weight)', () => {
     const trips = evaluate5CardLow(parseCards('2s 2h 2d 3c 4s'));
     const pair2s = evaluate5CardLow(parseCards('2s 2h Kd Qc Js'));
-    // Both enter the penalty tier (100_000_000+)
-    // Trips: 4-3-2-2-2, Pair: K-Q-2-2. Descending encoding: [4,3,2,2,2] vs [13,12,2,2]
-    // In encodeKickers base-15: 4*15^4 + 3*15^3 + 2*15^2 + 2*15 + 2
-    //   vs 13*15^3 + 12*15^2 + 2*15 + 2
-    // The pair with K-Q will encode higher, so pair is worse (higher value)
-    expect(trips.value).toBeLessThan(pair2s.value);
+    // Any one-pair hand beats any three-of-a-kind hand in ace-to-five low.
+    expect(trips.value).toBeGreaterThan(pair2s.value);
   });
 
   it('suit does NOT matter in low evaluation (identical ranks = same value)', () => {
@@ -646,16 +642,16 @@ describe('evaluate5Card27Low — Correct reverse-highball tiers', () => {
     const with_ace = evaluate5Card27Low(parseCards('As 2d 3c 4h 5s'));
     const with_9 = evaluate5Card27Low(parseCards('9s 2d 3c 4h 5s'));
 
-    // A-2-3-4-5 is a straight in 2-7 (tier 4)
+    // A-2-3-4-5 is ace-high in 2-7 (tier 0)
     // 9-5-4-3-2 is not a straight, just high card (tier 0)
-    // Straight is MUCH worse than high card
+    // Ace-high is worse than nine-high
     expect(with_ace.value).toBeGreaterThan(with_9.value);
   });
 
-  it('A-2-3-4-5 is a straight, not the best hand', () => {
+  it('A-2-3-4-5 is ace-high, not the best hand', () => {
     const wheel = evaluate5Card27Low(parseCards('As 2d 3c 4h 5s'));
     const number1 = evaluate5Card27Low(parseCards('2s 3d 4c 5h 7s'));
-    // Wheel is a straight (tier 4), number one is high card (tier 0)
+    // Both are high-card hands; seven-high beats ace-high
     expect(wheel.value).toBeGreaterThan(number1.value);
   });
 });

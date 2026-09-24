@@ -56,7 +56,7 @@ export class RazzGame extends BaseStudGame {
 
     for (let i = 0; i < this.state.players.length; i++) {
       const p = this.state.players[i];
-      if (p.folded || p.sittingOut) continue;
+      if (p.folded || p.sittingOut || p.allIn) continue;
 
       const value = this.getShowingHandValue(p.id, true);
       if (value < bestLowValue) {

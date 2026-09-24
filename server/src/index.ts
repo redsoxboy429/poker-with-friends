@@ -66,6 +66,14 @@ if (NODE_ENV === 'production') {
 
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
+  const objectEvents = new Set(['create-room', 'join-room', 'sit-down', 'action', 'discard', 'pick-variant', 'update-settings', 'add-on', 'kick-player']);
+  socket.use(([event, payload], next) => {
+    if (objectEvents.has(event) && (!payload || typeof payload !== 'object' || Array.isArray(payload))) {
+      socket.emit('error', { message: `Invalid ${event} payload` });
+      return;
+    }
+    next();
+  });
 
   // ---- Room Creation ----
   socket.on('create-room', ({ playerName, settings }) => {
@@ -184,21 +192,33 @@ io.on('connection', (socket) => {
   });
 
   // ---- Player Action ----
-  socket.on('action', ({ type, amount }) => {
+  socket.on('action', (payload) => {
+    if (!payload || typeof payload !== 'object') { socket.emit('error', { message: 'Invalid action' }); return; }
+    const { type, amount } = payload;
     const room = roomManager.getRoomForSocket(socket.id);
     if (!room?.gameController) return;
+    if (!room.gameController.acceptsVersion(payload.handId, payload.actionCount)) {
+      socket.emit('error', { message: 'Action is stale; wait for the current hand state' }); return;
+    }
     room.gameController.handleAction(socket.id, type, amount);
   });
 
   // ---- Discard (Draw Games) ----
-  socket.on('discard', ({ cardIndices }) => {
+  socket.on('discard', (payload) => {
+    if (!payload || !Array.isArray(payload.cardIndices)) { socket.emit('error', { message: 'Invalid discard' }); return; }
+    const { cardIndices } = payload;
     const room = roomManager.getRoomForSocket(socket.id);
     if (!room?.gameController) return;
+    if (!room.gameController.acceptsVersion(payload.handId, payload.actionCount)) {
+      socket.emit('error', { message: 'Discard is stale; wait for the current hand state' }); return;
+    }
     room.gameController.handleDiscard(socket.id, cardIndices);
   });
 
   // ---- Dealer's Choice Pick ----
-  socket.on('pick-variant', ({ variant }) => {
+  socket.on('pick-variant', (payload) => {
+    if (!payload || typeof payload.variant !== 'string') { socket.emit('error', { message: 'Invalid variant' }); return; }
+    const { variant } = payload;
     const room = roomManager.getRoomForSocket(socket.id);
     if (!room?.gameController) return;
     const player = roomManager.getPlayer(socket.id);
@@ -259,6 +279,9 @@ io.on('connection', (socket) => {
       return;
     }
     // Destroy game controller (clears timers)
+    if (room.gameController?.getState() && room.gameController.getState()!.phase !== 'complete') {
+      socket.emit('error', { message: 'Finish the current hand before stopping; use Pause table to wait' }); return;
+    }
     if (room.gameController) {
       room.gameController.destroy();
       room.gameController = null;
@@ -312,6 +335,9 @@ io.on('connection', (socket) => {
 
   // ---- Add-On (top up chips — immediate if between hands, queued during active hand) ----
   socket.on('add-on', ({ amount }) => {
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
+      socket.emit('error', { message: 'Add-on must be a finite nonnegative number' }); return;
+    }
     const player = roomManager.getPlayer(socket.id);
     const room = roomManager.getRoomForSocket(socket.id);
     if (!player || !room) return;
@@ -330,17 +356,20 @@ io.on('connection', (socket) => {
     }
 
     // Determine if a hand is in progress
-    const handInProgress = room.state === 'playing' && !!room.gameController?.getState();
+    const hand = room.gameController?.getState();
+    const handInProgress = !!hand && hand.phase !== 'complete';
 
     if (handInProgress) {
       // Queue the add-on — takes effect on next hand
       player.queuedAddOn = amount;
+      player.queuedAddOnIncrement = amount - player.chips;
       io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
       console.log(`[room] ${player.name} queued add-on of $${amount.toFixed(2)} in room ${room.code}`);
     } else {
       // Apply immediately (between hands or in lobby)
       player.chips = amount;
       player.queuedAddOn = undefined;
+      player.queuedAddOnIncrement = undefined;
       player.sittingOut = false; // Re-enter if sitting out
       io.to(room.code).emit('room-state', roomManager.getRoomStateView(room));
       // Auto-resume countdown if this tipped us to 2+ active players

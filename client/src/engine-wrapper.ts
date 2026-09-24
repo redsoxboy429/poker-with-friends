@@ -65,38 +65,8 @@ export const VARIANT_NAMES: Record<GameVariant, string> = {
   [GameVariant.LimitOmahaHigh]: 'Limit Omaha High',
 };
 
-/** All currently playable variants (in 8-game rotation order + new games) */
-export const PLAYABLE_VARIANTS: GameVariant[] = [
-  GameVariant.LimitHoldem,
-  GameVariant.OmahaHiLo,
-  GameVariant.Razz,
-  GameVariant.Stud,
-  GameVariant.StudHiLo,
-  GameVariant.NLH,
-  GameVariant.PLO,
-  GameVariant.PLOHiLo,
-  GameVariant.TwoSevenSD,
-  GameVariant.TwoSevenTD,
-  GameVariant.Badugi,
-  GameVariant.Badeucy,
-  GameVariant.Badacey,
-  GameVariant.Archie,
-  GameVariant.DrawmahaHigh,
-  GameVariant.Drawmaha27,
-  GameVariant.DrawmahaA5,
-  GameVariant.Drawmaha49,
-  GameVariant.LimitDrawmahaHigh,
-  GameVariant.LimitDrawmaha27,
-  GameVariant.LimitDrawmahaA5,
-  GameVariant.LimitDrawmaha49,
-  GameVariant.TenThirtyDraw,
-  GameVariant.PLBadugiDD,
-  GameVariant.PLBadeucyDD,
-  GameVariant.PLBadaceyDD,
-  GameVariant.PLArchieDD,
-  GameVariant.PLTenThirtyDD,
-  GameVariant.LimitOmahaHigh,
-];
+/** Initial validated scope: the nine-game mix. */
+export const PLAYABLE_VARIANTS: GameVariant[] = [...NINE_GAME_ROTATION];
 
 /** Create default players for local play.
  * Last bot gets a short stack (20% of starting chips) for side pot testing. */

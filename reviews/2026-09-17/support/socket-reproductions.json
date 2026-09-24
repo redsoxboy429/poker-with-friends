@@ -1,0 +1,12 @@
+[
+  {
+    "name": "S01: null action payload crashes the server process",
+    "exit": {
+      "code": 1,
+      "signal": null
+    },
+    "error": [
+      "TypeError: Cannot destructure property 'type' of 'object null' as it is null.\r"
+    ]
+  }
+]

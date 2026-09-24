@@ -1,0 +1,90 @@
+[
+  {
+    "name": "C01: next hand leaves previous folder at zero displayed cards",
+    "before": [
+      {
+        "id": "p0",
+        "count": 0,
+        "chips": 99,
+        "showCards": true
+      },
+      {
+        "id": "p1",
+        "count": 2,
+        "chips": 101,
+        "showCards": false
+      }
+    ],
+    "after": [
+      {
+        "id": "p0",
+        "count": 0,
+        "chips": 97,
+        "showCards": true
+      },
+      {
+        "id": "p1",
+        "count": 2,
+        "chips": 100,
+        "showCards": false
+      }
+    ]
+  },
+  {
+    "name": "C02: Stud runout jumps from three to seven cards with only showdown delay",
+    "immediate": [
+      {
+        "id": "p0",
+        "count": 7,
+        "chips": 4,
+        "showCards": true
+      },
+      {
+        "id": "p1",
+        "count": 7,
+        "chips": 0,
+        "showCards": false
+      }
+    ],
+    "at800ms": [
+      {
+        "id": "p0",
+        "count": 7,
+        "chips": 4,
+        "showCards": true
+      },
+      {
+        "id": "p1",
+        "count": 7,
+        "chips": 0,
+        "showCards": true
+      }
+    ]
+  },
+  {
+    "name": "C03: settled stacks are displayed before slow board runout finishes",
+    "atRunoutStart": [
+      {
+        "id": "p0",
+        "count": 2,
+        "chips": 20,
+        "showCards": true
+      },
+      {
+        "id": "p1",
+        "count": 2,
+        "chips": 0,
+        "showCards": true
+      }
+    ],
+    "boardCardsShown": 0
+  },
+  {
+    "name": "C04: exact all-in raise button sends zero when minRaise equals maxRaise",
+    "legalRaiseTo": 3,
+    "sent": [
+      "raise",
+      0
+    ]
+  }
+]

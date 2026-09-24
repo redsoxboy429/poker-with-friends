@@ -1,3 +1,4 @@
+import { NINE_GAME_ROTATION } from "poker-engine";
 // ============================================================
 // Room Manager — Room lifecycle, player seat assignment
 // ============================================================
@@ -31,6 +32,7 @@ export class RoomManager {
 
   /** Create a new room. Returns the room code. */
   createRoom(hostSocketId: string, hostName: string, settings: RoomSettings): string {
+    if (settings.variant && !NINE_GAME_ROTATION.includes(settings.variant)) throw new Error("Select a nine-game variant");
     let code = generateCode();
     // Avoid collisions (astronomically unlikely at this scale)
     while (this.rooms.has(code)) {
@@ -215,6 +217,7 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room) return;
 
+    room.gameController?.destroy();
     // Clear all timers
     for (const timer of room.disconnectTimers.values()) {
       clearTimeout(timer);
@@ -277,11 +280,13 @@ export class RoomManager {
     if (room.hostSocketId !== socketId) throw new Error('Only the host can update settings');
     if (room.state !== 'lobby') throw new Error('Cannot change settings while playing');
 
+    if (updates.variant && !NINE_GAME_ROTATION.includes(updates.variant)) throw new Error("Select a nine-game variant");
     Object.assign(room.settings, updates);
   }
 
   /** Sit down at the table with a buy-in. Returns the chip amount. */
   sitDown(socketId: string, buyInBB: number): number {
+    if (typeof buyInBB !== 'number' || !Number.isFinite(buyInBB)) throw new Error('Invalid buy-in');
     const room = this.getRoomForSocket(socketId);
     if (!room) throw new Error('Not in a room');
     const player = room.players.get(socketId);
@@ -336,6 +341,7 @@ export class RoomManager {
     if (!room) throw new Error('Not in a room');
     if (room.hostSocketId !== socketId) throw new Error('Only the host can update settings');
 
+    if (updates.variant && !NINE_GAME_ROTATION.includes(updates.variant)) throw new Error("Select a nine-game variant");
     Object.assign(room.settings, updates);
   }
 

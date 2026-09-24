@@ -300,19 +300,18 @@ export abstract class BaseStudGame extends BaseGame {
     const showing = this.upCards.get(playerId) || [];
     if (showing.length === 0) return useLow ? Infinity : -1;
 
-    if (useLow) {
-      // Razz: evaluate showing as partial low hand (lower = better)
-      const ranks = showing.map(c => c.rank === Rank.Ace ? 1 : c.rank).sort((a, b) => a - b);
-      let value = 0;
-      for (const r of ranks) value = value * 15 + r;
-      return value;
-    } else {
-      // Stud High: evaluate showing as partial high hand (higher = better)
-      // Use bestHighHand for 5+ cards, otherwise simple ranking
-      const ranks = showing.map(c => c.rank).sort((a, b) => b - a);
-      let value = 0;
-      for (const r of ranks) value = value * 15 + r;
-      return value;
+    const counts = new Map<number, number>();
+    for (const card of showing) {
+      const rank = useLow && card.rank === Rank.Ace ? 1 : card.rank;
+      counts.set(rank, (counts.get(rank) ?? 0) + 1);
     }
+    const groups = [...counts].sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+    const pattern = groups.map(g => g[1]).join(',');
+    const tier = pattern.startsWith('4') ? 4 : pattern.startsWith('3') ? 3
+      : pattern.startsWith('2,2') ? 2 : pattern.startsWith('2') ? 1 : 0;
+    // Categories dominate kickers; high cards are compared highest-first in both games.
+    const ranks = groups.map(g => g[0]);
+    while (ranks.length < 4) ranks.push(0);
+    return ranks.reduce((value, rank) => value * 15 + rank, tier);
   }
 }

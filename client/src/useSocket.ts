@@ -141,7 +141,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         lastAction: action.lastAction ?? null,
         handDescription: action.handDescription ?? null,
         sessionState: action.sessionState ?? state.sessionState,
-        chipsBehind: action.chipsBehind ?? state.chipsBehind,
+        chipsBehind: action.chipsBehind ?? null,
         ...(clearWinners ? { winners: null, finalState: null, handDescriptions: null, countdown: null } : {}),
       };
     }
@@ -340,12 +340,14 @@ function useSocketInternal(): SocketContextValue {
   }, []);
 
   const sendAction = useCallback((type: ActionType, amount?: number) => {
-    socketRef.current?.emit('action', { type, amount });
-  }, []);
+    if (!state.handState) return;
+    socketRef.current?.emit('action', { type, amount, handId: state.handState.id, actionCount: state.handState.actionHistory.length });
+  }, [state.handState]);
 
   const sendDiscard = useCallback((cardIndices: number[]) => {
-    socketRef.current?.emit('discard', { cardIndices });
-  }, []);
+    if (!state.handState) return;
+    socketRef.current?.emit('discard', { cardIndices, handId: state.handState.id, actionCount: state.handState.actionHistory.length });
+  }, [state.handState]);
 
   const startHand = useCallback(() => {
     socketRef.current?.emit('start-hand');

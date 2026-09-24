@@ -9,7 +9,16 @@ import {
   PlayerState,
   AvailableActions,
   HandState,
+  GamePhase,
 } from './types.js';
+
+const BETTING_PHASES = new Set([
+  GamePhase.BettingPreflop, GamePhase.BettingFlop, GamePhase.BettingTurn,
+  GamePhase.BettingRiver, GamePhase.BettingThird, GamePhase.BettingFourth,
+  GamePhase.BettingFifth, GamePhase.BettingSixth, GamePhase.BettingSeventh,
+  GamePhase.BettingPostDraw1, GamePhase.BettingPostDraw2, GamePhase.BettingPostDraw3,
+  GamePhase.BettingAfterDraw,
+]);
 
 /**
  * Calculate the current pot size including all bets on the table.
@@ -39,7 +48,7 @@ export function calculatePotLimitMax(state: HandState, player: PlayerState): num
  */
 export function getAvailableActions(state: HandState): AvailableActions {
   const player = state.players[state.activePlayerIndex];
-  if (!player) {
+  if (!BETTING_PHASES.has(state.phase) || !player || player.folded || player.allIn || player.sittingOut) {
     return {
       canFold: false, canCheck: false, canCall: false, callAmount: 0,
       canBet: false, minBet: 0, maxBet: 0,
@@ -130,6 +139,22 @@ export function getAvailableActions(state: HandState): AvailableActions {
       }
       break;
     }
+  }
+
+  if (state.bettingStructure !== BettingStructure.FixedLimit) {
+    const last = [...state.actionHistory.slice(state.phaseStartActionIndex)].reverse()
+      .find(a => a.playerId === player.id && a.betLevel !== undefined);
+    // A short all-in does not reopen a player who already called or raised.
+    // Multiple short raises reopen when their combined increase reaches a full raise.
+    if (last && !(last.type === 'check' && last.betLevel === 0) &&
+        state.currentBet - last.betLevel! < Math.max(state.lastRaise, state.bigBlind)) {
+      canRaise = false;
+      canBet = false;
+    }
+  }
+  if (!state.players.some(p => p.id !== player.id && !p.folded && !p.sittingOut && !p.allIn && p.chips > 0)) {
+    canBet = false;
+    canRaise = false;
   }
 
   return {
@@ -275,6 +300,12 @@ export function validateAction(
   actionType: string,
   amount?: number,
 ): { valid: boolean; error?: string; adjustedAmount?: number } {
+  if (!BETTING_PHASES.has(state.phase)) {
+    return { valid: false, error: 'Hand is not accepting betting actions' };
+  }
+  if (amount !== undefined && (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0)) {
+    return { valid: false, error: 'Amount must be a finite nonnegative number' };
+  }
   const player = state.players[state.activePlayerIndex];
   if (!player || player.id !== playerId) {
     return { valid: false, error: 'Not your turn' };

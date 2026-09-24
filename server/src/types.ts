@@ -39,6 +39,7 @@ export interface RoomPlayer {
   sittingOut: boolean;
   seated: boolean;                // Has bought in and is ready to play
   queuedAddOn?: number;           // Pending add-on amount (applied on next hand)
+  queuedAddOnIncrement?: number;  // New chips to add; never overwrite settled winnings.
 }
 
 export interface RoomStateView {
@@ -79,8 +80,8 @@ export interface ClientToServerEvents {
   'join-room': (data: { playerName: string; roomCode: string }) => void;
   'sit-down': (data: { buyInBB: number }) => void;
   'leave-room': () => void;
-  'action': (data: { type: ActionType; amount?: number }) => void;
-  'discard': (data: { cardIndices: number[] }) => void;
+  'action': (data: { type: ActionType; amount?: number; handId: string; actionCount: number }) => void;
+  'discard': (data: { cardIndices: number[]; handId: string; actionCount: number }) => void;
   'start-hand': () => void;
   'pick-variant': (data: { variant: GameVariant }) => void;
   'update-settings': (data: Partial<RoomSettings>) => void;

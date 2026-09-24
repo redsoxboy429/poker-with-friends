@@ -12,6 +12,8 @@ import {
   GameSession,
   GameMode,
   CAP_RULES,
+  NINE_GAME_ROTATION,
+  planShowdown,
   createGame,
   type PlayerState,
   type TableConfig,
@@ -55,8 +57,11 @@ export class GameController {
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private autoDealTimer: ReturnType<typeof setTimeout> | null = null;
   private firstHand: boolean = true;
+  private pendingChooserId: string | null = null;
   private lastActionIndex: number = 0; // Tracks action history for broadcasting
   private countdownPaused: boolean = false;
+  private hostPaused = false;
+  private presenting = false;
   private countdownRemaining: number = 0;
 
   constructor(room: Room, callbacks: GameCallbacks) {
@@ -74,7 +79,7 @@ export class GameController {
   /** Get active (connected, seated, not sitting out) players sorted by seat */
   private getActivePlayers(): RoomPlayer[] {
     return [...this.room.players.values()]
-      .filter(p => p.connected && p.seated && !p.sittingOut)
+      .filter(p => p.connected && p.seated && !p.sittingOut && (p.chips > 0 || (p.queuedAddOn ?? 0) > 0))
       .sort((a, b) => a.seatIndex - b.seatIndex);
   }
 
@@ -88,6 +93,10 @@ export class GameController {
 
   /** Start a new hand */
   startHand(): void {
+    if (this.hostPaused || this.presenting || this.pendingChooserId || (this.game && this.game.getState().phase !== GamePhase.Complete)) {
+      this.callbacks.sendError(this.room.hostSocketId, "Finish the current hand or game choice first");
+      return;
+    }
     const activePlayers = this.getActivePlayers();
     if (activePlayers.length < 2) {
       // Broadcast error to host
@@ -119,11 +128,12 @@ export class GameController {
       // The chooser needs to pick a variant
       const chooserSeat = sessionState.chooserSeatIndex;
       if (chooserSeat !== null) {
-        const chooser = activePlayers.find(p => p.seatIndex === chooserSeat);
+        const chooser = activePlayers[chooserSeat];
         if (chooser) {
           // Transition room to playing so all clients leave the lobby view
           this.room.state = 'playing';
           this.callbacks.broadcastRoomState(this.room.code);
+          this.pendingChooserId = chooser.playerId;
           this.callbacks.sendDcChoose(chooser.socketId);
           return; // Wait for pick
         }
@@ -135,6 +145,13 @@ export class GameController {
 
   /** Handle Dealer's Choice variant pick */
   handleVariantPick(playerId: string, variant: GameVariant): void {
+    const player = this.getSocketPlayer(playerId);
+    if (!player) return;
+    if (this.hostPaused || this.pendingChooserId !== playerId || !NINE_GAME_ROTATION.includes(variant)) {
+      this.callbacks.sendError(player.socketId, "Only the current chooser may pick a nine-game variant");
+      return;
+    }
+    this.pendingChooserId = null;
     this.session.setDealersChoice(variant, this.buttonIndex);
     this.dealHand();
   }
@@ -152,8 +169,9 @@ export class GameController {
       // Apply any queued add-ons before building engine players
       for (const rp of activePlayers) {
         if (rp.queuedAddOn !== undefined) {
-          rp.chips = rp.queuedAddOn;
+          rp.chips += rp.queuedAddOnIncrement ?? 0;
           rp.queuedAddOn = undefined;
+          rp.queuedAddOnIncrement = undefined;
         }
       }
 
@@ -204,7 +222,8 @@ export class GameController {
       this.lastActionIndex = 0; // Reset for new hand
 
       // Broadcast initial state
-      this.broadcastState();
+      if (this.game.getState().phase === GamePhase.Complete) this.handleHandComplete();
+      else this.broadcastState();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to deal hand';
       console.error('[game-controller] dealHand error:', message);
@@ -213,7 +232,13 @@ export class GameController {
   }
 
   /** Handle a player action (fold/check/call/bet/raise) */
+  acceptsVersion(handId: unknown, actionCount: unknown): boolean {
+    const state = this.game?.getState();
+    return !!state && state.phase !== GamePhase.Complete && handId === state.id && actionCount === state.actionHistory.length;
+  }
+
   handleAction(socketId: string, type: ActionType, amount?: number): void {
+    if (this.hostPaused) { this.callbacks.sendError(socketId, "Table paused by host"); return; }
     if (!this.game) {
       this.callbacks.sendError(socketId, 'No hand in progress');
       return;
@@ -244,6 +269,7 @@ export class GameController {
 
   /** Handle a discard action (draw games) */
   handleDiscard(socketId: string, cardIndices: number[]): void {
+    if (this.hostPaused) { this.callbacks.sendError(socketId, "Table paused by host"); return; }
     if (!this.game) {
       this.callbacks.sendError(socketId, 'No hand in progress');
       return;
@@ -334,7 +360,7 @@ export class GameController {
     // Build hand descriptions for showdown display
     const handDescriptions: Record<string, string> = {};
     for (const enginePlayer of state.players) {
-      if (!enginePlayer.folded) {
+      if (!enginePlayer.folded && state.players.filter(p => !p.folded && !p.sittingOut).length > 1) {
         try {
           const desc = this.game!.getHandDescription(enginePlayer.id);
           if (desc?.description) {
@@ -369,8 +395,12 @@ export class GameController {
       this.callbacks.sendHandComplete(socketId, winners, view, handDescriptions, lastAction);
     }
 
-    // Start auto-deal countdown
-    this.startCountdown();
+    this.presenting = true;
+    this.autoDealTimer = setTimeout(() => {
+      this.presenting = false;
+      this.autoDealTimer = null;
+      this.startCountdown();
+    }, planShowdown(state).durationMs);
   }
 
   /** Broadcast filtered state to all connected players */
@@ -425,8 +455,8 @@ export class GameController {
 
     this.countdownRemaining = Math.floor(durationMs / 1000);
 
-    // Auto-pause immediately if < 2 active players
-    if (this.getActivePlayers().length < 2) {
+    // Preserve a deliberate host pause when the hand finishes.
+    if (this.hostPaused || this.getActivePlayers().length < 2) {
       this.countdownPaused = true;
       this.callbacks.broadcastCountdown(this.room.code, -1);
       return;
@@ -455,15 +485,15 @@ export class GameController {
 
   /** Auto-resume countdown if it was paused due to insufficient players */
   autoResumeIfReady(): void {
-    if (!this.countdownPaused) return;
+    if (!this.countdownPaused || this.hostPaused || this.presenting) return;
     if (this.getActivePlayers().length < 2) return;
     this.resumeCountdown();
   }
 
   /** Pause the auto-deal countdown (host only) */
   pauseCountdown(): void {
-    if (!this.countdownTimer || this.countdownPaused) return;
-    clearInterval(this.countdownTimer);
+    this.hostPaused = true;
+    if (this.countdownTimer) clearInterval(this.countdownTimer);
     this.countdownTimer = null;
     this.countdownPaused = true;
     // Broadcast 0 to indicate paused
@@ -472,6 +502,19 @@ export class GameController {
 
   /** Resume the auto-deal countdown (host only) */
   resumeCountdown(): void {
+    this.hostPaused = false;
+    if (this.pendingChooserId) {
+      this.countdownPaused = false;
+      this.callbacks.broadcastCountdown(this.room.code, 0);
+      const chooser = this.getSocketPlayer(this.pendingChooserId);
+      if (chooser) this.callbacks.sendDcChoose(chooser.socketId);
+      return;
+    }
+    if (this.presenting || (this.game && this.game.getState().phase !== GamePhase.Complete)) {
+      this.countdownPaused = false;
+      this.callbacks.broadcastCountdown(this.room.code, 0);
+      return;
+    }
     if (!this.countdownPaused) return;
     // Don't resume if still below 2 active players
     if (this.getActivePlayers().length < 2) return;
@@ -500,7 +543,7 @@ export class GameController {
 
   /** Check if countdown is paused */
   isPaused(): boolean {
-    return this.countdownPaused;
+    return this.hostPaused || this.countdownPaused;
   }
 
   /** Clear all timers */
@@ -528,8 +571,8 @@ export class GameController {
 
     const config: TableConfig = {
       maxPlayers: 6,
-      smallBlind: isStud ? 0 : s.smallBlind,
-      bigBlind: isStud ? 0 : s.bigBlind,
+      smallBlind: isStud ? 0 : isLimit ? (s.smallBet || s.bigBlind) / 2 : s.smallBlind,
+      bigBlind: isStud ? 0 : isLimit ? (s.smallBet || s.bigBlind) : s.bigBlind,
       ante: isStud ? studAnte : 0,
       bringIn: isStud ? studBringIn : 0,
       startingChips: s.startingChips,
@@ -584,6 +627,8 @@ export class GameController {
 
   /** Update game mode between hands (host only). Recreates the session. */
   updateGameMode(mode: GameMode, variant?: GameVariant): void {
+    if (variant && !NINE_GAME_ROTATION.includes(variant)) throw new Error("Select a nine-game variant");
+    if (this.pendingChooserId || (this.game && this.game.getState().phase !== GamePhase.Complete)) throw new Error("Change games between hands");
     const sessionConfig = {
       mode,
       variant,
@@ -597,6 +642,7 @@ export class GameController {
   destroy(): void {
     this.clearTimers();
     this.game = null;
+    this.presenting = false;
+    this.pendingChooserId = null;
   }
 }
-

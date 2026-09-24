@@ -3,6 +3,7 @@
 // ============================================================
 
 import {
+  PLAYABLE_VARIANTS,
   GameVariant,
   GamePhase,
   ActionType,
@@ -128,7 +129,10 @@ export const GAME_CATEGORIES = [
     { name: "Pot-Limit", variants: [GameVariant.DrawmahaHigh, GameVariant.Drawmaha27, GameVariant.DrawmahaA5, GameVariant.Drawmaha49] },
     { name: "Fixed Limit", variants: [GameVariant.LimitDrawmahaHigh, GameVariant.LimitDrawmaha27, GameVariant.LimitDrawmahaA5, GameVariant.LimitDrawmaha49] },
   ]},
-];
+].map(category => ({ ...category, structures: category.structures
+  .map(structure => ({ ...structure, variants: structure.variants.filter(v => PLAYABLE_VARIANTS.includes(v)) }))
+  .filter(structure => structure.variants.length > 0),
+})).filter(category => category.structures.length > 0);
 
 // Variants that use fixed-limit betting (need small bet / big bet fields)
 export const LIMIT_VARIANTS = new Set<string>([

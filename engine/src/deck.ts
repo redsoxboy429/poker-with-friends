@@ -83,6 +83,7 @@ export function shuffleDeck(deck: Card[]): Card[] {
 export class Deck {
   private cards: Card[];
   private position: number;
+  private discards: Card[] = [];
 
   constructor() {
     this.cards = shuffleDeck(createDeck());
@@ -99,11 +100,27 @@ export class Deck {
 
   /** Deal n cards */
   dealMany(n: number): Card[] {
+    if (!Number.isInteger(n) || n < 0 || n > this.remaining()) throw new Error("Not enough cards to deal");
     const cards: Card[] = [];
     for (let i = 0; i < n; i++) {
       cards.push(this.deal());
     }
     return cards;
+  }
+
+  /** Draw replacements before adding this player's discards to the reusable muck. */
+  exchange(discarded: Card[]): Card[] {
+    const n = discarded.length;
+    if (n > this.remaining() + this.discards.length) throw new Error('Not enough cards to draw');
+    const replacements = this.dealMany(Math.min(n, this.remaining()));
+    if (replacements.length < n) {
+      this.cards = shuffleDeck(this.discards);
+      this.discards = [];
+      this.position = 0;
+      replacements.push(...this.dealMany(n - replacements.length));
+    }
+    this.discards.push(...discarded);
+    return replacements;
   }
 
   /** Burn one card (deal face-down, discard) */
