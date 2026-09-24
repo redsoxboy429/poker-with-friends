@@ -282,7 +282,8 @@ function useSocketInternal(): SocketContextValue {
     });
 
     socket.on('removed', (data) => {
-      if (roomRef.current) writeToken(roomRef.current.code, null);
+      // A takeover by another window keeps the token: that window owns the seat now.
+      if (roomRef.current && data.clearSeat) writeToken(roomRef.current.code, null);
       roomRef.current = null;
       dispatch({ type: 'LEAVE_ROOM' });
       dispatch({ type: 'ERROR', message: data.reason });

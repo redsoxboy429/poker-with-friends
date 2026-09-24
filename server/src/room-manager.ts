@@ -40,6 +40,11 @@ export interface Room {
   ledger: Map<string, LedgerRow>;    // memberId → row
 }
 
+/** A reconnect token that no longer matches a seat (the player was removed). */
+export class SeatGoneError extends Error {
+  constructor() { super('Your seat at this table has been closed'); }
+}
+
 export interface JoinResult {
   seatIndex: number;
   playerId: string;
@@ -130,6 +135,7 @@ export class RoomManager {
         this.socketToRoom.delete(oldSocketId);
         player.socketId = socketId;
         player.connected = true;
+        player.pendingLeave = undefined; // coming back cancels a mid-hand leave
         room.players.set(socketId, player);
         room.seatMap[player.seatIndex] = socketId;
         this.socketToRoom.set(socketId, room.code);
@@ -137,7 +143,8 @@ export class RoomManager {
         if (room.emptyTimer) { clearTimeout(room.emptyTimer); room.emptyTimer = null; }
         return { seatIndex: player.seatIndex, playerId: player.playerId, token: player.token, reconnected: true, replacedSocketId };
       }
-      // Unknown token (e.g. the seat was since removed): fall through to a normal join.
+      // The seat behind this token was removed (left or kicked): do not silently re-seat.
+      throw new SeatGoneError();
     }
 
     const name = cleanName(playerName);
@@ -212,6 +219,7 @@ export class RoomManager {
     room.seatMap[player.seatIndex] = null;
     room.players.delete(player.socketId);
     this.socketToRoom.delete(player.socketId);
+    room.gameController?.handleSeatVacated(player.seatIndex);
 
     if (room.hostSocketId === player.socketId) {
       const nextHost = [...room.players.values()].find(p => p.connected) ?? [...room.players.values()][0];

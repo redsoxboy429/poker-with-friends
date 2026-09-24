@@ -7,7 +7,7 @@ import { createServer } from 'http';
 import { Server, type Socket } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { RoomManager, type Room } from './room-manager.js';
+import { RoomManager, SeatGoneError, type Room } from './room-manager.js';
 import { GameController } from './game-controller.js';
 import type { ClientToServerEvents, ServerToClientEvents, RoomPlayer } from './types.js';
 
@@ -77,7 +77,7 @@ function guarded(socket: PokerSocket, fallback: string, fn: () => void): void {
 function announceDeparture(room: Room, player: RoomPlayer, kicked: boolean): void {
   const target = io.sockets.sockets.get(player.socketId);
   if (target) {
-    if (kicked) target.emit('removed', { reason: 'You were removed by the host' });
+    if (kicked) target.emit('removed', { reason: 'You were removed by the host', clearSeat: true });
     target.leave(room.code);
   }
   io.to(room.code).emit('player-left', { playerName: player.name, seatIndex: player.seatIndex });
@@ -120,7 +120,18 @@ io.on('connection', (socket) => {
   socket.on('join-room', ({ playerName, roomCode, token }) => guarded(socket, 'Failed to join room', () => {
     const current = roomManager.getRoomForSocket(socket.id);
     if (current && current.code !== String(roomCode).toUpperCase()) throw new Error('Already in another room');
-    const result = roomManager.joinRoom(socket.id, playerName, roomCode, token);
+    // One seat per connection: a second join from the same socket is only a token refresh of its own seat.
+    if (current && current.players.get(socket.id)?.token !== token) throw new Error('Already in this room');
+    let result;
+    try {
+      result = roomManager.joinRoom(socket.id, playerName, roomCode, token);
+    } catch (err) {
+      if (err instanceof SeatGoneError) {
+        socket.emit('removed', { reason: err.message, clearSeat: true });
+        return;
+      }
+      throw err;
+    }
     const room = roomManager.getRoom(roomCode)!;
     const player = room.players.get(socket.id)!;
 
@@ -128,7 +139,8 @@ io.on('connection', (socket) => {
     if (result.replacedSocketId) {
       const old = io.sockets.sockets.get(result.replacedSocketId);
       if (old) {
-        old.emit('removed', { reason: 'This seat was opened in another window' });
+        // The new window now owns the stored token, so the old one must not clear it.
+        old.emit('removed', { reason: 'This seat was opened in another window', clearSeat: false });
         old.leave(room.code);
       }
     }
@@ -213,7 +225,9 @@ io.on('connection', (socket) => {
     if (room.hostSocketId !== socket.id) throw new Error('Only the host can update settings');
     const before = room.settings;
     const next = roomManager.updateSettings(socket.id, updates);
-    const modeChanged = next.gameMode !== before.gameMode || next.variant !== before.variant;
+    // Only a real mode change (or a new game in Specific mode) rebuilds the rotation.
+    const modeChanged = next.gameMode !== before.gameMode ||
+      (next.gameMode === 'specific' && next.variant !== before.variant);
     if (modeChanged && room.gameController) {
       try {
         room.gameController.updateGameMode(next.gameMode, next.variant);
@@ -260,6 +274,7 @@ io.on('connection', (socket) => {
     if (!player || !room) return;
     player.sittingOut = true;
     player.autoSatOut = false;
+    room.gameController?.handleSeatVacated(player.seatIndex);
     broadcastRoom(room);
   });
 

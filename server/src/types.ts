@@ -161,7 +161,7 @@ export interface ServerToClientEvents {
   'player-left': (data: { playerName: string; seatIndex: number }) => void;
   'dc-choose': () => void;
   /** Kicked, or the room is gone: clear the stored reconnect token */
-  'removed': (data: { reason: string }) => void;
+  'removed': (data: { reason: string; clearSeat: boolean }) => void;
   'countdown': (data: { seconds: number }) => void;
   'game-stopped': () => void;
   'error': (data: { message: string }) => void;

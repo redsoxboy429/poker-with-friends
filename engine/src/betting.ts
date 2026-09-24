@@ -351,6 +351,7 @@ export function validateAction(
   playerId: string,
   actionType: string,
   amount?: number,
+  opts: { allowOpenFold?: boolean } = {},
 ): { valid: boolean; error?: string; adjustedAmount?: number } {
   if (!BETTING_PHASES.has(state.phase)) {
     return { valid: false, error: 'Hand is not accepting betting actions' };
@@ -373,7 +374,7 @@ export function validateAction(
 
   switch (actionType) {
     case 'fold':
-      if (!available.canFold) return { valid: false, error: 'Cannot fold (no bet to face)' };
+      if (!available.canFold && !opts.allowOpenFold) return { valid: false, error: 'Cannot fold (no bet to face)' };
       return { valid: true };
 
     case 'check':

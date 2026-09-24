@@ -76,6 +76,10 @@ export function normalizeSettings(input: unknown, base?: RoomSettings): RoomSett
   if (bringIn >= smallBet) throw new Error('Bring-in must be less than the small bet');
   if (buyInMin <= 0) throw new Error('Minimum buy-in must be positive');
   if (buyInMin > buyInMax) throw new Error('Minimum buy-in cannot exceed the maximum');
+  const MAX_STAKE = 100_000; // play money; keeps amounts far inside exact float range
+  if ([smallBlind, bigBlind, smallBet, bigBet, ante, bringIn, buyInMin, buyInMax].some(v => v > MAX_STAKE)) {
+    throw new Error(`Amounts are limited to $${MAX_STAKE.toLocaleString('en-US')}`);
+  }
 
   return {
     gameMode: gameMode as GameMode,

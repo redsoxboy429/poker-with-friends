@@ -72,16 +72,12 @@ export abstract class BaseStudGame extends BaseGame {
 
   protected postForcedBets(): void {
     // Everyone posts an ante — dead money straight into the pot
-    let totalAntes = 0;
-    const eligibleIds: string[] = [];
-
     for (const player of this.state.players) {
       if (player.sittingOut) continue;
       const anteAmount = Math.min(this.config.ante, player.chips);
       player.chips -= anteAmount;
+      player.bet += anteAmount;
       player.totalBet += anteAmount;
-      totalAntes += anteAmount;
-      eligibleIds.push(player.id);
       if (player.chips === 0) player.allIn = true;
       this.state.actionHistory.push({
         type: ActionType.PostAnte,
@@ -90,10 +86,9 @@ export abstract class BaseStudGame extends BaseGame {
       });
     }
 
-    // Antes go directly into the pot — NOT into player.bet
-    if (totalAntes > 0) {
-      this.state.pots.push({ amount: totalAntes, eligiblePlayerIds: eligibleIds });
-    }
+    // Collect the antes like bets, so a player all-in for less than a full ante
+    // is only eligible for the antes they matched (side pot for the rest).
+    this.state.pots = this.collect();
 
     this.state.phase = GamePhase.Dealing;
   }

@@ -1,81 +1,58 @@
-# Nine-game build — Claude checkpoint (2026-09-23)
+# Nine-game build — Claude checkpoint (2026-09-23, build complete)
 
-Branch `codex/nine-game-stabilization`. Nothing pushed or deployed. Spec: `docs/NINE-GAME-RULES.md` (signed off).
+Branch `codex/nine-game-stabilization`. **Nothing pushed or deployed.** Spec: `docs/NINE-GAME-RULES.md` (signed off). Test script for Josh: `docs/TEST-SESSION.md`.
 
-## Done
+## Status: ready for Josh's multi-device test
 
-- **Phase 0:** Node 22.23.2 installed with winget for the current user. Repo-local git identity set. Codex baseline committed (`f6a5098`).
-- **Phase 1:** rules spec signed off and committed (`515a9b6`).
-- **Phase 2:** two audit agents checked the engine against the spec.
-  - Evaluators: clean.
-  - Betting and showdown: 11 defects. All fixed in this commit, except that client display of uncalled returns is still pending (see Remaining, client item 4).
-- **Engine changes:**
-  - 8-game now uses 2-7 Triple Draw; 9-game = 8-game + 2-7 Single Draw.
-  - New `TableRotation` (`engine/src/table-rotation.ts`) tracks the button and dealer's choice by physical seat, and resets the button at the start of each game.
-  - Stud bring-in:
-    - the bring-in player chooses to bring in or complete (`pendingBringIn`, `betOptions`)
-    - players all-in from the ante are skipped
-  - Stud first to act: ties go to the tied player closest to the left of the button.
-  - Stud high: an open pair on 4th street allows the big bet (`openPairFourth`, `bigBetInForce`, `raiseOptions`).
-  - Limit:
-    - the blinds count toward the preflop cap
-    - an all-in raise under half a bet doesn't reopen the betting or use a cap slot (`fullRaise`)
-  - Chips:
-    - `CHIP_UNIT` is a fixed $0.25
-    - pot splits are exact
-    - the engine rejects non-quarter amounts
-  - Uncalled bets are returned and recorded in `uncalledReturns`. A fold win now reports only the called pot.
-  - Pots with a single eligible player (dead money) stay as pots and are awarded at the end of the hand.
-- **Engine tests:**
-  - 460 passing: 445 existing and updated, plus 15 new in `tests/spec-rules.test.ts`.
-  - Stud tests now use `tests/helpers.ts` `startStud()`.
-  - The stress-test playout loop now throws instead of spinning when no legal action exists.
-- **Server rewrite (compiles; tests NOT updated yet):**
-  - `settings.ts` validates stakes: $0.25 multiples; host-editable ante/bring-in defaulting to ¼ of the small bet; buy-in min/max in dollars.
-  - `room-manager.ts`:
-    - reconnect uses a token; a name can't reclaim a seat
-    - disconnected players keep their seat
-    - leaving or being kicked mid-hand takes effect after the hand settles
-    - server-side ledger
-    - top-up works as "top up TO X", never lowering a stack
-  - `game-controller.ts`:
-    - uses `TableRotation`
-    - waits 60s only on the disconnected player's turn, then check/fold, or stand pat on a draw
-    - disconnected players are sat out at the next deal
-    - reconnect sends a full snapshot
-    - dealer's-choice chooser grace timer
-  - `index.ts` is wired to all of the above, with a new `removed` event.
+`npm run check` passes. It runs the client typecheck and lint, the engine, server and client tests, both builds, and the socket smoke test.
 
-## Remaining, in order
+| Check | Codex baseline (9/17) | Now |
+|---|---|---|
+| Engine tests | 430 | 463 |
+| Server tests | 47 | 68 |
+| Client scenarios | 5 | 5 |
+| Client typecheck | 167 errors | 0 |
+| Client lint | 8 errors | 0 errors (3 practice-mode warnings) |
 
-1. **Server tests:** update `server/tests/*` for the new APIs:
-   - `sitDown` takes dollars
-   - `joinRoom(…, token)`
-   - `handleVariantPick` checks the physical seat
-   - no reclaim by name
-   - `topUp` replaces the queued-increment approach
-   
-   Add tests for:
-   - turn grace
-   - off-turn disconnect
-   - leave during a hand
-   - top-up to a target
-   - the ledger
-   - button reset across segments
-   - rebuilding the socket smoke test
-2. **Client:**
-   - `useSocket` stores the token per room and auto-rejoins on reconnect
-   - `sit-down` sends dollars
-   - render the server ledger (replace `ledgerRef`)
-   - ActionPanel: `betOptions`/`raiseOptions` buttons (bring-in vs complete, open pair)
-   - lobby fields for ante, bring-in and the buy-in range
-   - show uncalled returns separately in the win display
-   - handle the `removed` event
-   - client typecheck (167 errors) and lint (8) cleanup
-3. **Verification:** re-run the audit agents on the final diff, then a single `npm run check` gate, then a guided multi-device test script for Josh.
-4. **Docs:** update the project `CLAUDE.md` and ROADMAP through the audit gate.
+## What was done
 
-## Notes
+- **Engine rules**, fixed from two audits against the spec:
+  - Stud: bring-in or complete; skip players all-in from the ante; first-to-act ties go to the player closest to the button's left; the open-pair big-bet option on 4th.
+  - Limit: the blinds count toward the preflop cap; the half-bet short all-in rule.
+  - Chips: fixed $0.25 unit and exact pot splits.
+  - Uncalled bets are returned and recorded, not counted as winnings.
+  - An ante short-stack is only eligible for the antes they matched.
+  - A short all-in big blind no longer forces a decision on the lone opponent.
+  - `forfeit()` lets a player who left fold even when checking is free.
+- **Rotation:** `TableRotation` tracks by physical seat. The button resets at the start of each game segment. Dealer's choice runs one orbit plus one hand, and handles a chooser leaving. 8-Game now uses 2-7 Triple Draw.
+- **Server:**
+  - Settings validation.
+  - Reconnect by token only; a stale token is refused.
+  - Disconnects: the table waits only on the disconnected player's turn, then checks or folds, stands pat on a draw, or posts the bring-in. Still disconnected at the next deal: sat out.
+  - Leave or kick mid-hand takes effect after the hand settles.
+  - The ledger lives on the server; top-ups go "to" an amount.
+  - A new occupant of a reused seat can never see the previous occupant's cards.
+  - Dealer's choice passes on when the chooser leaves, sits out or times out.
+- **Client:**
+  - Stores the reconnect token and rejoins automatically, with one socket per client.
+  - Buy-ins in dollars, including for someone arriving mid-game.
+  - The server ledger in the Tracker.
+  - Bring-in / complete and open-pair buttons.
+  - Uncalled bets shown as returned; "(away)" labels on disconnected players.
+- **Tooling:**
+  - `npm run check` gate.
+  - `npm run dev` without `concurrently`.
+  - Tests capped at 2 workers to limit CPU heat.
 
-- **CPU load:** vitest runs one worker per core. To limit heat, run the engine tests with `npx vitest run --pool=forks --poolOptions.forks.maxForks=2` (or `--no-file-parallelism`). Don't run the full suite repeatedly.
-- **Node PATH:** Node is at `%LOCALAPPDATA%\Microsoft\WinGet\Packages\OpenJS.NodeJS.22_*\node-v22.23.2-win-x64`. A shell opened before the install needs a restart to pick it up.
+## Known limits (not blockers)
+
+- Practice mode (`/practice`) still has its own animation code. It is outside the gate.
+- Leave and Kick buttons exist only between hands and in the lobby. The server supports mid-hand leave, but the UI doesn't expose it.
+- Rooms live in memory, so a server restart loses the session (Josh: acceptable for the first test).
+- No visual or browser testing was done. That's Josh's session.
+
+## Next
+
+1. Josh runs `docs/TEST-SESSION.md` locally (`npm run dev`) and reports issues by step number.
+2. After fixes, push the branch and merge to `main` to deploy on Railway. Both need Josh's approval.
+3. Update the project `CLAUDE.md` and ROADMAP through the audit gate.

@@ -76,6 +76,37 @@ describe('Stud bring-in (spec §4)', () => {
   });
 });
 
+describe('Short forced bets (audit 2026-09-23)', () => {
+  it('a player all-in for less than the ante only wins the antes they matched', () => {
+    const ps = players(3); ps[0].chips = 0.25;
+    const game = new StudGame(STUD, ps, 0);
+    game.start();
+    const pots = game.getState().pots;
+    expect(pots).toEqual([
+      { amount: 0.75, eligiblePlayerIds: ['p0', 'p1', 'p2'] },
+      { amount: 0.5, eligiblePlayerIds: ['p1', 'p2'] },
+    ]);
+  });
+
+  it('a big blind all-in for less than the small blind leaves the small blind nothing to decide', () => {
+    const ps = players(2); ps[1].chips = 0.25; // p1 is the big blind heads-up (button p0 posts the SB)
+    const game = new NLHGame(NL, ps, 0);
+    game.start();
+    const s = game.getState();
+    expect(s.phase).toBe(GamePhase.Complete);
+    expect(s.players.reduce((sum, p) => sum + p.chips, 0)).toBe(100.25);
+  });
+
+  it('forfeit folds a departing player even when checking is free', () => {
+    const game = new NLHGame(NL, players(2), 0);
+    game.start();
+    game.act('p0', ActionType.Call);
+    expect(game.getAvailableActions().canFold).toBe(false);
+    expect(game.forfeit('p1')).toBe(true);
+    expect(game.getState().players[1].folded).toBe(true);
+  });
+});
+
 describe('Stud first to act from 4th street (spec §4)', () => {
   class Probe extends StudGame {
     actor(boards: string[]) {

@@ -76,6 +76,8 @@ export class GameController {
   private hostPaused = false;
   private presenting = false;
   private countdownRemaining = 0;
+  /** Engine playerId → memberId of whoever was dealt into the current/last hand */
+  private handMembers = new Map<string, string>();
   /** Last completion payload, re-sent to players who reconnect during the result */
   private lastCompletion: { winners: WinnerInfo[]; handDescriptions: Record<string, string>; lastAction?: LastAction } | null = null;
 
@@ -164,6 +166,12 @@ export class GameController {
       this.callbacks.sendError(player.socketId, 'Only the current chooser may pick a nine-game variant');
       return;
     }
+    if (!this.getActivePlayers().includes(player)) {
+      // The chooser sat out or went broke before picking: the choice passes on.
+      this.callbacks.sendError(player.socketId, 'You are not dealt in, so the choice passes to the next player');
+      this.replanChoice();
+      return;
+    }
     const plan = this.rotation.choose(variant);
     this.pendingChooserSeat = null;
     this.clearChoiceTimer();
@@ -212,6 +220,7 @@ export class GameController {
       const game = createGame(variant, enginePlayers, buttonIndex, config);
       game.start();
       this.game = game;
+      this.handMembers = new Map(activePlayers.map(rp => [rp.playerId, rp.memberId]));
       this.lastCompletion = null;
       this.room.state = 'playing';
       this.lastActionIndex = 0;
@@ -322,16 +331,27 @@ export class GameController {
     if (state && state.phase !== GamePhase.Complete) {
       this.sendHandStateTo(player, state, undefined);
     } else if (state && this.lastCompletion) {
-      const view = getPlayerView(state, player.playerId);
+      const view = getPlayerView(state, this.viewerId(player));
       this.callbacks.sendHandComplete(player.socketId, this.lastCompletion.winners, view, this.lastCompletion.handDescriptions, this.lastCompletion.lastAction);
     }
     if (this.pendingChooserSeat === player.seatIndex && !this.hostPaused) {
       this.callbacks.sendDcChoose(player.socketId);
     }
-    if (!state || state.phase === GamePhase.Complete) {
-      const seconds = this.countdownPaused || this.hostPaused ? -1 : this.countdownTimer ? this.countdownRemaining : null;
+    if (this.hostPaused) {
+      this.callbacks.broadcastCountdown(this.room.code, -1);
+    } else if (!state || state.phase === GamePhase.Complete) {
+      const seconds = this.countdownPaused ? -1 : this.countdownTimer ? this.countdownRemaining : null;
       if (seconds !== null) this.callbacks.broadcastCountdown(this.room.code, seconds);
     }
+  }
+
+  /**
+   * The engine ID a room player may see a hand as. Engine IDs are p{seat}, so a
+   * later occupant of the same seat must view the hand as a spectator, never
+   * as the player who held those cards.
+   */
+  private viewerId(player: RoomPlayer): string {
+    return this.handMembers.get(player.playerId) === player.memberId ? player.playerId : '__spectator__';
   }
 
   /** Room membership changed in a way clients should see (e.g. host transfer). */
@@ -363,7 +383,11 @@ export class GameController {
     }, leaving ? 0 : TURN_GRACE_MS);
   }
 
-  /** Check if legal, otherwise fold; on a draw, stand pat. */
+  /**
+   * The automatic action (spec §7). Draw: stand pat. A pending stud bring-in:
+   * post the bring-in (it is forced). A player who left: fold. A disconnected
+   * player: check if legal, otherwise fold.
+   */
   private autoAct(playerId: string): void {
     const state = this.liveState();
     if (!state || !this.game) return;
@@ -372,8 +396,13 @@ export class GameController {
       return;
     }
     const actions = this.game.getAvailableActions();
-    if (actions.canCheck) this.apply(() => this.game!.act(playerId, ActionType.Check));
+    const rp = this.getRoomPlayer(playerId);
+    const leaving = !rp || !!rp.pendingLeave;
+    if (state.pendingBringIn && actions.canBet) this.apply(() => this.game!.act(playerId, ActionType.Bet, actions.minBet));
+    else if (leaving) this.apply(() => this.game!.forfeit(playerId));
+    else if (actions.canCheck) this.apply(() => this.game!.act(playerId, ActionType.Check));
     else if (actions.canFold) this.apply(() => this.game!.act(playerId, ActionType.Fold));
+    else console.error(`[game-controller] no automatic action for ${playerId} in ${state.phase}`);
   }
 
   private scheduleChoiceTimer(): void {
@@ -381,15 +410,29 @@ export class GameController {
     this.choiceTimer = setTimeout(() => {
       this.choiceTimer = null;
       const seat = this.pendingChooserSeat;
-      const chooser = seat === null ? undefined : this.getSeatPlayer(seat);
-      if (!chooser || chooser.connected) return;
-      // The chooser never came back: sit them out and re-plan without them.
-      chooser.sittingOut = true;
-      chooser.autoSatOut = true;
-      this.pendingChooserSeat = null;
-      this.rotation.cancelPlan();
-      this.startHand();
+      if (seat === null) return;
+      const chooser = this.getSeatPlayer(seat);
+      if (chooser?.connected) return;
+      // The chooser never came back: sit them out and pass the choice on.
+      if (chooser) { chooser.sittingOut = true; chooser.autoSatOut = true; }
+      this.replanChoice();
     }, TURN_GRACE_MS);
+  }
+
+  /** The pending chooser is gone (left, kicked, sat out, timed out): pass the choice left. */
+  private replanChoice(): void {
+    this.pendingChooserSeat = null;
+    this.clearChoiceTimer();
+    this.rotation.cancelPlan();
+    if (!this.hostPaused) this.startHand();
+  }
+
+  /**
+   * A seat stopped being playable between hands (the player left, was kicked,
+   * or sat out). If they were about to pick the dealer's-choice game, re-plan.
+   */
+  handleSeatVacated(seat: number): void {
+    if (this.pendingChooserSeat === seat) this.replanChoice();
   }
 
   private clearChoiceTimer(): void {
@@ -438,7 +481,7 @@ export class GameController {
 
     for (const roomPlayer of this.room.players.values()) {
       if (!roomPlayer.connected) continue;
-      const view = getPlayerView(state, roomPlayer.playerId);
+      const view = getPlayerView(state, this.viewerId(roomPlayer));
       this.callbacks.sendHandComplete(roomPlayer.socketId, winners, view, handDescriptions, lastAction);
     }
 
@@ -473,11 +516,12 @@ export class GameController {
   private sendHandStateTo(roomPlayer: RoomPlayer, state: HandState, lastAction: LastAction | undefined): void {
     if (!this.game || !roomPlayer.connected) return;
     const activePlayer = state.players[state.activePlayerIndex];
-    const view = getPlayerView(state, roomPlayer.playerId);
-    const isYourTurn = activePlayer?.id === roomPlayer.playerId;
+    const viewer = this.viewerId(roomPlayer);
+    const view = getPlayerView(state, viewer);
+    const isYourTurn = activePlayer?.id === viewer;
     const actions = isYourTurn ? this.game.getAvailableActions() : null;
     let handDescription: string | undefined;
-    if (state.players.some(p => p.id === roomPlayer.playerId && !p.folded)) {
+    if (state.players.some(p => p.id === viewer && !p.folded)) {
       try {
         handDescription = this.game.getHandDescription(roomPlayer.playerId)?.description;
       } catch {

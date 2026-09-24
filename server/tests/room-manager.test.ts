@@ -116,7 +116,8 @@ describe('RoomManager', () => {
       rm.joinRoom('socket2', 'Alice', code);
       rm.handleDisconnect('socket2');
       expect(() => rm.joinRoom('socket3', 'Alice', code)).toThrow('Name already taken');
-      expect(() => rm.joinRoom('socket3', 'alice', code, 'wrong-token')).toThrow('Name already taken');
+      // An unknown token is a closed seat, never a fresh join under the same name.
+      expect(() => rm.joinRoom('socket3', 'alice', code, 'wrong-token')).toThrow('closed');
     });
 
     it('tokens are never included in the room state view', () => {

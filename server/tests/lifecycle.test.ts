@@ -131,6 +131,83 @@ describe('disconnects (§7)', () => {
   });
 });
 
+describe('audit regressions (2026-09-23)', () => {
+  const STUD = { gameMode: GameMode.SpecificGame, variant: GameVariant.Stud, smallBlind: 0.25, bigBlind: 0.5 };
+
+  it('a disconnected stud bring-in player has the bring-in posted after the grace period', () => {
+    const { rm, controller } = table(3, STUD);
+    controller.startHand();
+    expect(controller.getState()!.pendingBringIn).toBe(true);
+    const actor = actorSocket(controller);
+    rm.handleDisconnect(actor);
+    vi.advanceTimersByTime(TURN_GRACE_MS);
+    const s = controller.getState()!;
+    expect(s.pendingBringIn).toBe(false);
+    expect(s.actionHistory.at(-1)!.type).toBe(ActionType.BringIn);
+  });
+
+  it('a player who leaves on their turn folds, even when checking is free', () => {
+    const { rm, room, controller } = table(2);
+    controller.startHand();
+    controller.handleAction(actorSocket(controller), ActionType.Call); // SB completes; BB may check
+    const bb = actorSocket(controller);
+    const bbId = room.players.get(bb)!.playerId;
+    expect(controller.getState()!.players.find(p => p.id === bbId)!.folded).toBe(false);
+    rm.leaveRoom(bb);
+    vi.advanceTimersByTime(0);
+    const s = controller.getState()!;
+    expect(s.phase).toBe(GamePhase.Complete);
+    expect(s.players.find(p => p.id === bbId)!.folded).toBe(true);
+    expect(room.players.has(bb)).toBe(false); // seat freed once the hand settled
+  });
+
+  it('the choice passes on when the pending dealer\'s-choice chooser leaves', () => {
+    const { rm, controller, callbacks } = table(3, { ...NL, gameMode: GameMode.DealersChoice, variant: undefined });
+    controller.startHand();
+    expect(callbacks.sendDcChoose).toHaveBeenLastCalledWith('s0');
+    rm.leaveRoom('s0');
+    expect(callbacks.sendDcChoose).toHaveBeenLastCalledWith('s1');
+    controller.handleVariantPick('p1', GameVariant.PLO);
+    expect(controller.getState()!.variant).toBe(GameVariant.PLO);
+  });
+
+  it('the choice passes on when the pending chooser sits out, and a stale pick is refused', () => {
+    const { room, controller, callbacks } = table(3, { ...NL, gameMode: GameMode.DealersChoice, variant: undefined });
+    controller.startHand();
+    room.players.get('s0')!.sittingOut = true;
+    controller.handleVariantPick('p0', GameVariant.NLH);
+    expect(controller.getState()).toBeNull();
+    expect(callbacks.sendDcChoose).toHaveBeenLastCalledWith('s1');
+  });
+
+  it('a new occupant of a reused seat never receives the previous occupant\'s cards', () => {
+    const { rm, room, controller, callbacks } = table(3);
+    controller.startHand();
+    while (controller.getState()!.phase !== GamePhase.Complete) controller.handleAction(actorSocket(controller), ActionType.Fold);
+    const oldCards = controller.getState()!.players.find(p => p.id === 'p2')!.holeCards;
+    rm.leaveRoom('s2'); // between hands: seat freed at once
+    const { token } = rm.joinRoom('s9', 'Newbie', room.code);
+    expect(room.players.get('s9')!.playerId).toBe('p2');
+    rm.handleDisconnect('s9');
+    rm.joinRoom('s10', 'x', room.code, token);
+    controller.handlePlayerReconnected('p2');
+    const sent = JSON.stringify((callbacks.sendHandComplete as ReturnType<typeof vi.fn>).mock.calls.filter(c => c[0] === 's10'));
+    for (const card of oldCards) expect(sent).not.toContain(JSON.stringify(card));
+  });
+
+  it('a stale token after a kick is refused instead of silently re-seating', () => {
+    const { rm, room } = table(3);
+    const token = room.players.get('s2')!.token;
+    rm.handleDisconnect('s2');
+    rm.kickPlayer('s0', 2);
+    expect(() => rm.joinRoom('s9', 'P2', room.code, token)).toThrow('closed');
+  });
+
+  it('caps stakes and buy-ins at a sane maximum', () => {
+    expect(() => normalizeSettings({ ...NL, buyInMax: 1e300 })).toThrow('limited');
+  });
+});
+
 describe('leaving during a hand (§7)', () => {
   it('keeps the seat until the hand settles, folds on their turn, then cashes out', () => {
     const { rm, room, controller } = table(3);

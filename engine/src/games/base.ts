@@ -158,7 +158,7 @@ export abstract class BaseGame {
     this.dealInitialCards();
     this.setFirstActor();
     const canAct = this.state.players.filter(p => !p.sittingOut && !p.folded && !p.allIn);
-    if (canAct.length <= 1 && (!canAct.length || canAct[0].bet >= this.state.currentBet)) {
+    if (canAct.length <= 1 && (!canAct.length || canAct[0].bet >= this.highestOtherBet(canAct[0]))) {
       this.state.pendingBringIn = false;
       this.state.pots = this.collect();
       this.state.currentBet = 0;
@@ -177,12 +177,28 @@ export abstract class BaseGame {
     }
   }
 
+  private allowOpenFold = false;
+
+  /**
+   * Fold out of the hand on your turn even when checking is free — for a player
+   * who has left the table. A pending stud bring-in must be posted instead.
+   */
+  forfeit(playerId: string): boolean {
+    if (this.state.pendingBringIn) throw new Error('Post the bring-in first');
+    this.allowOpenFold = true;
+    try {
+      return this.act(playerId, ActionType.Fold);
+    } finally {
+      this.allowOpenFold = false;
+    }
+  }
+
   /**
    * Process a player action. Returns true if the hand is complete.
    */
   act(playerId: string, actionType: ActionType, amount?: number): boolean {
     // Validate the action
-    const validation = validateAction(this.state, playerId, actionType, amount);
+    const validation = validateAction(this.state, playerId, actionType, amount, { allowOpenFold: this.allowOpenFold });
     if (!validation.valid) {
       throw new Error(validation.error);
     }
@@ -360,6 +376,10 @@ export abstract class BaseGame {
     // If no one can act, round is over
     if (active.length === 0) return true;
 
+    // A lone player who already covers every all-in opponent has nothing left
+    // to decide (e.g. a big blind all-in for less than the small blind posted).
+    if (active.length === 1 && active[0].bet >= this.highestOtherBet(active[0])) return true;
+
     // Everyone still in has either matched the current bet or is all-in
     const allMatched = active.every(p => p.bet === this.state.currentBet);
     if (!allMatched) return false;
@@ -375,6 +395,13 @@ export abstract class BaseGame {
     // and has already acted this round (their bet equals the current bet)
     const next = this.state.players[nextActor];
     return next.bet === this.state.currentBet && this.hasActedThisRound(next.id);
+  }
+
+  /** The largest bet posted this round by any other live player */
+  protected highestOtherBet(player: PlayerState): number {
+    return Math.max(0, ...this.state.players
+      .filter(p => p !== player && !p.folded && !p.sittingOut)
+      .map(p => p.bet));
   }
 
   /** Check if a player has already acted in the current betting round */
