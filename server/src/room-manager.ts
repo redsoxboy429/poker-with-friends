@@ -14,6 +14,7 @@ import { customAlphabet, nanoid } from 'nanoid';
 import type { RoomSettings, RoomPlayer, RoomStateView, LedgerRow } from './types.js';
 import type { GameController } from './game-controller.js';
 import { normalizeSettings, isChipAmount } from './settings.js';
+import { BOT_NAMES, findScenario, type BotScenario } from './bots.js';
 
 // No ambiguous chars: I/L/O/0/1
 const generateCode = customAlphabet('ABCDEFGHJKMNPQRSTUVWXYZ23456789', 4);
@@ -38,6 +39,8 @@ export interface Room {
   /** Timer that destroys the room once nobody is connected */
   emptyTimer: ReturnType<typeof setTimeout> | null;
   ledger: Map<string, LedgerRow>;    // memberId → row
+  /** Bot table: bots play, the human host watches with every card face up */
+  bot?: BotScenario;
 }
 
 /** A reconnect token that no longer matches a seat (the player was removed). */
@@ -170,7 +173,7 @@ export class RoomManager {
       room.disconnectTimers.set(socketId, setTimeout(() => {
         room.disconnectTimers.delete(socketId);
         if (room.hostSocketId !== socketId || player.connected) return;
-        const next = [...room.players.values()].find(p => p.connected);
+        const next = [...room.players.values()].find(p => p.connected && !p.isBot);
         if (next) {
           room.hostSocketId = next.socketId;
           room.gameController?.notifyRoomChanged();
@@ -178,10 +181,11 @@ export class RoomManager {
       }, HOST_TRANSFER_MS));
     }
 
-    if (![...room.players.values()].some(p => p.connected) && !room.emptyTimer) {
+    const humanConnected = () => [...room.players.values()].some(p => p.connected && !p.isBot);
+    if (!humanConnected() && !room.emptyTimer) {
       room.emptyTimer = setTimeout(() => {
         room.emptyTimer = null;
-        if (![...room.players.values()].some(p => p.connected)) this.destroyRoom(room.code);
+        if (!humanConnected()) this.destroyRoom(room.code);
       }, EMPTY_ROOM_TTL_MS);
     }
     return { room, player };
@@ -222,10 +226,10 @@ export class RoomManager {
     room.gameController?.handleSeatVacated(player.seatIndex);
 
     if (room.hostSocketId === player.socketId) {
-      const nextHost = [...room.players.values()].find(p => p.connected) ?? [...room.players.values()][0];
+      const nextHost = [...room.players.values()].find(p => p.connected && !p.isBot) ?? [...room.players.values()].find(p => !p.isBot);
       if (nextHost) room.hostSocketId = nextHost.socketId;
     }
-    if (room.players.size === 0) this.destroyRoom(room.code);
+    if (![...room.players.values()].some(p => !p.isBot)) this.destroyRoom(room.code);
   }
 
   /**
@@ -303,6 +307,7 @@ export class RoomManager {
         queuedAddOn: p.queuedAddOn,
         playerId: p.playerId,
         leaving: !!p.pendingLeave,
+        isBot: !!p.isBot,
       }));
 
     return {
@@ -313,6 +318,7 @@ export class RoomManager {
       state: room.state,
       maxSeats: MAX_SEATS,
       ledger: [...room.ledger.values()].map(r => ({ ...r })),
+      ...(room.bot ? { bot: { scenario: room.bot.id, label: room.bot.label, description: room.bot.description } } : {}),
     };
   }
 
@@ -332,6 +338,7 @@ export class RoomManager {
     if (!room) throw new Error('Not in a room');
     const player = room.players.get(socketId);
     if (!player) throw new Error('Player not found');
+    if (room.bot) throw new Error('This is a bot table: you are watching');
     if (player.seated) throw new Error('Already seated');
     const { buyInMin = 0, buyInMax = Infinity } = room.settings;
     if (!isChipAmount(buyIn)) throw new Error('Buy-in must be a multiple of $0.25');
@@ -369,6 +376,30 @@ export class RoomManager {
     creditTopUp(room, player, target);
     player.sittingOut = false;
     return 'applied';
+  }
+
+  /**
+   * Create a bot table from a scenario. The human host watches (never seated);
+   * each bot gets a seat and its scenario stack.
+   */
+  createBotRoom(hostSocketId: string, hostName: string, scenarioId: unknown): string {
+    const scenario = findScenario(scenarioId);
+    const code = this.createRoom(hostSocketId, hostName, scenario.settings);
+    const room = this.rooms.get(code)!;
+    room.bot = scenario;
+    scenario.stacks.forEach((stack, i) => this.addBot(room, BOT_NAMES[i] ?? `Bot ${i + 1}`, stack));
+    return code;
+  }
+
+  private addBot(room: Room, name: string, stack: number): void {
+    const seatIndex = room.seatMap.indexOf(null);
+    if (seatIndex === -1) throw new Error('Room is full');
+    const bot = this.addPlayer(room, `bot:${room.code}:${seatIndex}`, name, seatIndex);
+    bot.isBot = true;
+    bot.botStack = stack;
+    bot.seated = true;
+    bot.chips = stack;
+    room.ledger.set(bot.memberId, { memberId: bot.memberId, name, buyIn: stack, cashOut: 0, stack, left: false });
   }
 
   /** Get total active room count */

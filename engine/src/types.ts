@@ -141,6 +141,8 @@ export interface PlayerAction {
   amount?: number;           // For bet/raise/call/all-in
   playerId: string;
   discardIndices?: number[]; // For discard actions: which hole card indices to replace
+  /** Public number of cards discarded (sent to opponents instead of the indices) */
+  discardCount?: number;
 }
 
 /** Player state within a hand */

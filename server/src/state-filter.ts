@@ -17,6 +17,9 @@ const STUD_PHASES = new Set([
   GamePhase.BettingSeventh,
 ]);
 
+/** Viewer id that sees every hand (bot-table spectators only; no human is in those hands) */
+export const REVEAL_ALL = '__reveal_all__';
+
 /** Stud variants (have cardVisibility on players) */
 const STUD_VARIANTS = new Set(['razz', 'stud', 'stud8']);
 
@@ -37,8 +40,8 @@ export function getPlayerView(state: HandState, playerId: string): PlayerView {
   const showAll = isShowdown(state.phase) && state.players.filter(p => !p.folded && !p.sittingOut).length > 1;
 
   const filteredPlayers: PlayerStateView[] = state.players.map(player => {
-    // Own cards — always visible
-    if (player.id === playerId) {
+    // Own cards — always visible. A bot-table spectator sees everyone's.
+    if (player.id === playerId || playerId === REVEAL_ALL) {
       return {
         ...player,
         holeCards: [...player.holeCards],
@@ -86,9 +89,9 @@ export function getPlayerView(state: HandState, playerId: string): PlayerView {
     // Strip action history of discard indices (reveals what opponents discarded)
     actionHistory: state.actionHistory.map(action => {
       if (action.playerId === playerId) return action;
-      // Hide exact discard indices from opponents
+      // Hide which cards opponents discarded, but not how many (that is public at a real table)
       if (action.discardIndices) {
-        return { ...action, discardIndices: undefined };
+        return { ...action, discardIndices: undefined, discardCount: action.discardIndices.length };
       }
       return action;
     }),

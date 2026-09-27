@@ -194,3 +194,11 @@ export function formatActionType(type: string, phase: string): string {
   }
   return type;
 }
+
+/** Watch-only bot tables (mirrors server/src/bots.ts BOT_SCENARIOS) */
+export const BOT_SCENARIOS: { id: string; label: string; description: string }[] = [
+  { id: 'side-pots', label: 'Side pots', description: 'NLH, five bots with $10–$150 stacks and lots of all-ins' },
+  { id: 'hi-lo', label: 'Hi/lo & quartering', description: 'O8 and Stud8, calling stations, many split pots' },
+  { id: 'caps', label: 'Mixed-game caps', description: 'NLH, PLO and 2-7 Single Draw with deep stacks (150 BB / 30 BB caps)' },
+  { id: 'ten-game', label: '10-Game soak', description: 'The full 10-Game rotation, five bots' },
+];

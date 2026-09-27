@@ -91,7 +91,7 @@ io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
   // Reject malformed payloads before any handler destructures them.
-  const objectEvents = new Set(['create-room', 'join-room', 'sit-down', 'action', 'discard', 'pick-variant', 'update-settings', 'add-on', 'kick-player']);
+  const objectEvents = new Set(['create-room', 'create-bot-room', 'join-room', 'sit-down', 'action', 'discard', 'pick-variant', 'update-settings', 'add-on', 'kick-player']);
   socket.use(([event, payload], next) => {
     if (objectEvents.has(event) && (!payload || typeof payload !== 'object' || Array.isArray(payload))) {
       socket.emit('error', { message: `Invalid ${event} payload` });
@@ -114,6 +114,24 @@ io.on('connection', (socket) => {
       token: host.token,
     });
     console.log(`[room] ${host.name} created room ${roomCode}`);
+  }));
+
+  // ---- Bot table: bots play, the creator watches with every card face up ----
+  socket.on('create-bot-room', ({ playerName, scenario }) => guarded(socket, 'Failed to create bot table', () => {
+    if (roomManager.getRoomForSocket(socket.id)) throw new Error('Already in a room');
+    const roomCode = roomManager.createBotRoom(socket.id, playerName, scenario);
+    const room = roomManager.getRoom(roomCode)!;
+    const host = room.players.get(socket.id)!;
+    socket.join(roomCode);
+    room.gameController = new GameController(room, createCallbacks(room.code));
+    socket.emit('room-created', {
+      roomCode,
+      roomState: roomManager.getRoomStateView(room),
+      yourPlayerId: host.playerId,
+      token: host.token,
+    });
+    room.gameController.startHand();
+    console.log(`[room] ${host.name} started bot table ${roomCode} (${room.bot!.id})`);
   }));
 
   // ---- Room Joining / Reconnecting ----

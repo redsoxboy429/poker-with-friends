@@ -28,11 +28,16 @@ import {
 
 import type { WinnerInfo } from 'poker-engine';
 import { creditTopUp, type Room } from './room-manager.js';
-import { getPlayerView } from './state-filter.js';
+import { getPlayerView, REVEAL_ALL } from './state-filter.js';
+import { decideBet, decideDiscards } from './bots.js';
+import { logHand, cardText } from './hand-log.js';
 import { isChipAmount, defaultStudForcedBet } from './settings.js';
 import type { PlayerView, RoomPlayer } from './types.js';
 
 const AUTO_DEAL_DELAY_MS = 15_000;
+/** Bot tables: pause before each bot decision, and between hands */
+export const BOT_ACTION_MS = 900;
+const BOT_BETWEEN_HANDS_MS = 5_000;
 /** How long the table waits for a disconnected player whose turn it is */
 export const TURN_GRACE_MS = 60_000;
 
@@ -78,6 +83,8 @@ export class GameController {
   private hostPaused = false;
   private presenting = false;
   private countdownRemaining = 0;
+  /** Stacks and cap at the deal, for the hand log */
+  private handStart: { buttonSeat: number; capBB: number | null; start: Record<string, number>; behind: Record<string, number> } | null = null;
   /** Engine playerId → memberId of whoever was dealt into the current/last hand */
   private handMembers = new Map<string, string>();
   /** Last completion payload, re-sent to players who reconnect during the result */
@@ -145,6 +152,17 @@ export class GameController {
       return;
     }
 
+    if (this.room.bot) {
+      // Bot tables only run while someone is watching, and busted bots rebuy.
+      if (!this.humanWatching()) {
+        this.countdownPaused = true;
+        return;
+      }
+      for (const p of this.room.players.values()) {
+        if (p.isBot && p.chips <= 0 && p.botStack) creditTopUp(this.room, p, p.botStack);
+      }
+    }
+
     // Anyone still disconnected at the deal sits out, keeping seat and chips.
     for (const p of this.room.players.values()) {
       if (p.seated && !p.connected && !p.sittingOut) {
@@ -176,7 +194,8 @@ export class GameController {
       this.broadcastSessionOnly();
       // Everyone clears the last hand and sees who is choosing.
       this.callbacks.broadcastChoicePending?.(this.room.code, chooser ? { name: chooser.name, seatIndex: chooser.seatIndex } : null);
-      if (chooser) this.callbacks.sendDcChoose(chooser.socketId);
+      if (chooser?.isBot) this.scheduleBotPick(chooser);
+      else if (chooser) this.callbacks.sendDcChoose(chooser.socketId);
       return;
     }
     this.dealHand(plan);
@@ -245,6 +264,12 @@ export class GameController {
       game.start();
       this.game = game;
       this.handMembers = new Map(activePlayers.map(rp => [rp.playerId, rp.memberId]));
+      this.handStart = {
+        buttonSeat: plan.buttonSeat,
+        capBB,
+        start: Object.fromEntries(enginePlayers.map(p => [p.id, p.chips])),
+        behind: { ...this.chipsBehind },
+      };
       this.lastCompletion = null;
       this.room.state = 'playing';
       this.lastActionIndex = 0;
@@ -380,7 +405,47 @@ export class GameController {
    * as the player who held those cards.
    */
   private viewerId(player: RoomPlayer): string {
-    return this.handMembers.get(player.playerId) === player.memberId ? player.playerId : '__spectator__';
+    if (this.handMembers.get(player.playerId) === player.memberId) return player.playerId;
+    // At a bot table the (human) spectator sees every card; nobody human is in the hand.
+    return this.room.bot && !player.isBot ? REVEAL_ALL : '__spectator__';
+  }
+
+  private humanWatching(): boolean {
+    return [...this.room.players.values()].some(p => !p.isBot && p.connected);
+  }
+
+  private botTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** A bot chooses the next dealer's-choice game from its scenario's list. */
+  private scheduleBotPick(bot: RoomPlayer): void {
+    const picks = this.room.bot?.picks ?? SELECTABLE_VARIANTS;
+    this.botTimer = setTimeout(() => {
+      this.botTimer = null;
+      if (this.pendingChooserSeat !== bot.seatIndex || this.hostPaused) return;
+      this.handleVariantPick(bot.playerId, picks[Math.floor(Math.random() * picks.length)]);
+    }, BOT_ACTION_MS);
+  }
+
+  /** A bot's turn: decide with its scenario style after a short pause so people can follow. */
+  private scheduleBotTurn(botId: string, handId: string, actionCount: number): void {
+    if (this.botTimer) clearTimeout(this.botTimer);
+    this.botTimer = setTimeout(() => {
+      this.botTimer = null;
+      const now = this.liveState();
+      if (!now || !this.game || now.id !== handId || now.actionHistory.length !== actionCount || this.hostPaused) return;
+      if (!this.humanWatching()) return; // resumes when a spectator reconnects
+      const bot = this.getRoomPlayer(botId);
+      if (!bot) return;
+      if (DRAW_PHASES.has(now.phase) && this.isDrawGame(this.game)) {
+        const me = now.players.find(p => p.id === botId)!;
+        const discards = decideDiscards(me.holeCards, now.variant);
+        this.apply(() => (this.game as BaseDrawGame).discard(botId, discards), bot.socketId);
+        return;
+      }
+      const d = decideBet(this.game.getAvailableActions(), this.room.bot!.style);
+      const type = { fold: ActionType.Fold, check: ActionType.Check, call: ActionType.Call, bet: ActionType.Bet, raise: ActionType.Raise }[d.type];
+      this.apply(() => this.game!.act(botId, type, 'amount' in d ? d.amount : undefined), bot.socketId);
+    }, BOT_ACTION_MS);
   }
 
   /** Room membership changed in a way clients should see (e.g. host transfer). */
@@ -399,6 +464,10 @@ export class GameController {
     const actor = state.players[state.activePlayerIndex];
     if (!actor) return;
     const rp = this.getRoomPlayer(actor.id);
+    if (rp?.isBot) {
+      this.scheduleBotTurn(actor.id, state.id, state.actionHistory.length);
+      return;
+    }
     const leaving = !rp || !!rp.pendingLeave;
     if (!leaving && rp.connected) return;
 
@@ -485,6 +554,8 @@ export class GameController {
       if (!roomPlayer) continue;
       roomPlayer.chips = enginePlayer.chips + (this.chipsBehind[enginePlayer.id] ?? 0);
       if (roomPlayer.queuedAddOn !== undefined) creditTopUp(this.room, roomPlayer, roomPlayer.queuedAddOn);
+      // Bot tables keep going: a busted bot rebuys (recorded in the ledger) before the countdown.
+      if (roomPlayer.isBot && roomPlayer.chips <= 0 && roomPlayer.botStack) creditTopUp(this.room, roomPlayer, roomPlayer.botStack);
     }
     this.chipsBehind = {};
     this.rotation.completeHand();
@@ -507,6 +578,7 @@ export class GameController {
 
     const lastAction = this.takeLastAction(state);
     this.lastCompletion = { winners, handDescriptions, lastAction };
+    this.writeHandLog(state, winners, handDescriptions);
 
     this.callbacks.onHandSettled?.(this.room.code);
     this.callbacks.broadcastRoomState(this.room.code);
@@ -521,8 +593,46 @@ export class GameController {
     this.autoDealTimer = setTimeout(() => {
       this.presenting = false;
       this.autoDealTimer = null;
-      this.startCountdown();
+      this.startCountdown(this.room.bot ? BOT_BETWEEN_HANDS_MS : AUTO_DEAL_DELAY_MS);
     }, planShowdown(state).durationMs);
+  }
+
+  /** One JSON line per completed hand (see hand-log.ts) */
+  private writeHandLog(state: HandState, winners: WinnerInfo[], descriptions: Record<string, string>): void {
+    const start = this.handStart;
+    if (!start) return;
+    logHand({
+      time: new Date().toISOString(),
+      room: this.room.code,
+      ...(this.room.bot ? { bot: this.room.bot.id } : {}),
+      handId: state.id,
+      mode: this.rotation.mode,
+      variant: state.variant,
+      capBB: start.capBB,
+      bigBlind: state.bigBlind,
+      buttonSeat: start.buttonSeat,
+      players: state.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        seat: p.seatIndex,
+        start: start.start[p.id] ?? 0,
+        behind: start.behind[p.id] ?? 0,
+        end: p.chips,
+        totalBet: p.totalBet,
+        folded: p.folded,
+        holeCards: p.holeCards.map(cardText),
+      })),
+      board: state.communityCards.map(cardText),
+      actions: state.actionHistory.map(a => ({
+        playerId: a.playerId,
+        type: a.type,
+        ...(a.amount !== undefined ? { amount: a.amount } : {}),
+        ...(a.discardIndices ? { discards: a.discardIndices.length } : {}),
+      })),
+      pots: state.pots.map(p => ({ amount: p.amount, eligible: [...p.eligiblePlayerIds] })),
+      winners: winners.map(w => ({ playerId: w.playerId, amount: w.amount, side: w.side, potLabel: w.potLabel, hand: descriptions[w.playerId] ?? w.handDescription })),
+      uncalled: state.uncalledReturns ?? [],
+    });
   }
 
   private takeLastAction(state: HandState): LastAction | undefined {
@@ -642,7 +752,8 @@ export class GameController {
       this.countdownPaused = false;
       this.callbacks.broadcastCountdown(this.room.code, 0);
       const chooser = this.getSeatPlayer(this.pendingChooserSeat);
-      if (chooser?.connected) this.callbacks.sendDcChoose(chooser.socketId);
+      if (chooser?.isBot) this.scheduleBotPick(chooser);
+      else if (chooser?.connected) this.callbacks.sendDcChoose(chooser.socketId);
       else this.scheduleChoiceTimer();
       return;
     }
@@ -740,6 +851,7 @@ export class GameController {
   /** Clean up on room destroy */
   destroy(): void {
     this.clearTimers();
+    if (this.botTimer) { clearTimeout(this.botTimer); this.botTimer = null; }
     if (this.turnTimer) { clearTimeout(this.turnTimer); this.turnTimer = null; }
     this.clearChoiceTimer();
     this.game = null;

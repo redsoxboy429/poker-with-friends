@@ -46,6 +46,22 @@ function rotateArray<T>(arr: T[], startIndex: number): T[] {
 
 const MAX_LOG_ENTRIES = 200;
 
+/** Draws per game in the 10-game mix (single draw vs triple draw) */
+const DRAW_COUNTS: Record<string, number> = { [GameVariant.TwoSevenSD]: 1, [GameVariant.TwoSevenTD]: 3, [GameVariant.Badugi]: 3 };
+
+/** "Draw 2 of 3" style status for draw games; null for other games */
+function describeDrawStatus(variant: string, phase: string): string | null {
+  const total = DRAW_COUNTS[variant];
+  if (!total) return null;
+  const drawing = /^draw-([0-9])$/.exec(phase);
+  if (drawing) return `Draw ${drawing[1]} of ${total}`;
+  const after = /^post-draw-([0-9])$/.exec(phase);
+  if (after) return `Betting after draw ${after[1]} of ${total}`;
+  if (phase === 'preflop') return `Betting before the first draw (${total} draw${total > 1 ? 's' : ''})`;
+  if (phase === 'complete' || phase === 'showdown') return 'Showdown';
+  return null;
+}
+
 /** Round to whole $0.25 chips */
 const toChips = (x: number) => Math.round(x * 4) / 4;
 
@@ -697,9 +713,18 @@ export default function MultiplayerTable() {
   const potTotal = collectedPot + currentStreetBets;
 
   const isDrawPhase = gameState && DRAW_PHASES.includes(gameState.phase);
+  const drawStatus = gameState ? describeDrawStatus(gameState.variant, gameState.phase) : null;
+  /** Cards drawn per completed draw, per player (opponents' counts are public, the cards are not) */
+  const drawHistories: Record<string, number[]> = {};
+  for (const a of gameState?.actionHistory ?? []) {
+    if (a.type !== 'discard' && a.type !== 'stand-pat') continue;
+    (drawHistories[a.playerId] ??= []).push(a.type === 'stand-pat' ? 0 : (a.discardIndices?.length ?? a.discardCount ?? 0));
+  }
 
   // Seat rotation — you always at bottom (multiplayer-only)
-  const mySeatIndex = gameState?.players.findIndex(p => p.id === myId) ?? 0;
+  // Spectators (bot tables, or anyone not dealt in) see the table unrotated.
+  const mySeatIndex = Math.max(0, gameState?.players.findIndex(p => p.id === myId) ?? 0);
+  const botTable = roomState.bot;
   const n = gameState?.players.length ?? 0;
   const rotatedPlayers = gameState ? rotateArray(gameState.players, mySeatIndex) : [];
   const rotatedActiveIndex = n > 0 ? (gameState!.activePlayerIndex - mySeatIndex + n + n) % n : -1;
@@ -917,10 +942,16 @@ export default function MultiplayerTable() {
                   <div className="text-[10px] text-amber-100/60 font-mono mb-1">{trackerText}</div>
                 )}
 
-                {/* Phase indicator */}
-                <div className="text-[10px] text-green-300/50 font-mono uppercase tracking-widest mb-2">
-                  {gameState.phase === 'complete' ? 'Showdown' : gameState.phase}
-                </div>
+                {/* Draw games: a clear draw status. Others: the small phase indicator. */}
+                {drawStatus ? (
+                  <div className="text-sm font-bold text-cyan-200 bg-black/40 px-3 py-0.5 rounded-full mb-2 tracking-wide">
+                    {drawStatus}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-green-300/50 font-mono uppercase tracking-widest mb-2">
+                    {gameState.phase === 'complete' ? 'Showdown' : gameState.phase}
+                  </div>
+                )}
 
                 {/* Community Cards — animated reveal (FROM App.tsx lines 1437-1455) */}
                 {gameState.communityCards.length > 0 && (
@@ -988,7 +1019,8 @@ export default function MultiplayerTable() {
                 !awaitingChoice && (
                   (isRealShowdown && !player.folded && showdownNow) ||
                   player.id === myId ||
-                  (isAllInRunout && !player.folded))
+                  (isAllInRunout && !player.folded) ||
+                  (!!botTable && !player.folded))
               }
               position={positions[i]}
               isTop={positions[i][1] < 50}
@@ -1004,6 +1036,7 @@ export default function MultiplayerTable() {
               lastDrawAction={awaitingChoice ? undefined : lastDrawActions[player.id]}
               forceAllDown={studForceDown}
               chipsBehind={socketState.chipsBehind?.[player.id]}
+              drawHistory={awaitingChoice ? undefined : drawHistories[player.id]}
               handDescription={
                 showdownNow && isRealShowdown && !player.folded && socketState.handDescriptions
                   ? socketState.handDescriptions[player.id]
@@ -1089,7 +1122,12 @@ export default function MultiplayerTable() {
 
       {/* ======== Bottom Bar — Actions (FROM App.tsx lines 1630-1704, multiplayer version) ======== */}
       <div className="flex-shrink-0 px-4 pb-3 pt-1">
-        {myRoomPlayer && !myRoomPlayer.seated ? (
+        {botTable && (
+          <div className="text-center text-[11px] text-cyan-200 mb-1">
+            Watching bots: <span className="font-semibold">{botTable.label}</span> — every card is face up. Use Pause to stop and inspect.
+          </div>
+        )}
+        {myRoomPlayer && !myRoomPlayer.seated && !botTable ? (
           // Arrived mid-game: buy in now, dealt in from the next hand
           <div className="max-w-xs mx-auto">
             <BuyInPanel min={tableBuyInMin} max={maxBuyIn} value={tableBuyIn} onChange={setBuyInChoice}

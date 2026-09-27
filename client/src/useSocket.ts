@@ -56,6 +56,8 @@ export interface SocketActions {
   connect: () => void;
   disconnect: () => void;
   createRoom: (playerName: string, settings: RoomSettings) => void;
+  /** Start a watch-only bot table (scenario ids in constants BOT_SCENARIOS) */
+  createBotRoom: (playerName: string, scenario: string) => void;
   joinRoom: (playerName: string, roomCode: string) => void;
   /** Buy in with a dollar amount */
   sitDown: (buyIn: number) => void;
@@ -376,6 +378,10 @@ function useSocketInternal(): SocketContextValue {
     socketRef.current?.emit('create-room', { playerName, settings });
   }, []);
 
+  const createBotRoom = useCallback((playerName: string, scenario: string) => {
+    socketRef.current?.emit('create-bot-room', { playerName, scenario });
+  }, []);
+
   const joinRoom = useCallback((playerName: string, roomCode: string) => {
     const code = roomCode.toUpperCase();
     socketRef.current?.emit('join-room', { playerName, roomCode: code, token: readToken(code) });
@@ -447,6 +453,7 @@ function useSocketInternal(): SocketContextValue {
     connect,
     disconnect,
     createRoom,
+    createBotRoom,
     joinRoom,
     sitDown,
     leaveRoom,

@@ -23,6 +23,7 @@ export function PlayerSeat({
   chipsBehind,
   forceAllDown,
   handDescription,
+  drawHistory,
 }: {
   player: Omit<PlayerState, 'holeCards'> & { holeCards: (PlayerState['holeCards'][number] | null)[] };
   isActive: boolean;
@@ -40,6 +41,8 @@ export function PlayerSeat({
   chipsBehind?: number;
   forceAllDown?: boolean;
   handDescription?: string;
+  /** Draw games: cards drawn on each completed draw so far (0 = stood pat) */
+  drawHistory?: number[];
 }) {
   const hasVisibility = player.cardVisibility && player.cardVisibility.length > 0;
   const hideCards = player.folded || player.holeCards.length === 0;
@@ -103,7 +106,8 @@ export function PlayerSeat({
       <span className="text-[10px] font-mono opacity-70">
         {player.chips}
         {chipsBehind && chipsBehind > 0 ? (
-          <span className="text-slate-400 ml-1" title="Mixed-game cap: chips behind return after the hand">+{chipsBehind} behind</span>
+          // Own dark pill so it stays readable on every seat color, including the yellow active seat
+          <span className="ml-1 px-1.5 py-px rounded bg-black/80 text-amber-200 font-semibold" title="Mixed-game cap: chips behind return after the hand">+${chipsBehind} behind</span>
         ) : null}
       </span>
     </div>
@@ -121,6 +125,19 @@ export function PlayerSeat({
     <span className="text-[10px] font-bold text-cyan-400">
       {lastDrawAction.toUpperCase()}
     </span>
+  ) : null;
+
+  // Draws per round, e.g. "DRAWS 3 · 1 · 0" (0 = stood pat)
+  const drawRow = drawHistory && drawHistory.length > 0 && !player.folded ? (
+    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/75">
+      <span className="text-[9px] font-semibold text-slate-400 tracking-wide">DRAWS</span>
+      {drawHistory.map((n, i) => (
+        <span key={i} className={`min-w-[16px] text-center text-[11px] font-bold rounded px-1 ${n === 0 ? 'bg-emerald-800 text-emerald-100' : 'bg-cyan-800 text-cyan-50'}`}
+          title={n === 0 ? `Draw ${i + 1}: stood pat` : `Draw ${i + 1}: drew ${n}`}>
+          {n === 0 ? 'P' : n}
+        </span>
+      ))}
+    </div>
   ) : null;
 
   const statusBadge = player.folded ? (
@@ -145,6 +162,7 @@ export function PlayerSeat({
       {isTop ? (
         <>
           {nameChips}
+          {drawRow}
           {statusBadge}
           {cards && <div className="flex gap-0.5">{cards}</div>}
           {handBadge}
@@ -154,6 +172,7 @@ export function PlayerSeat({
           {handBadge}
           {cards && <div className="flex gap-0.5">{cards}</div>}
           {statusBadge}
+          {drawRow}
           {nameChips}
         </>
       )}

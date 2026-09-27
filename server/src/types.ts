@@ -67,6 +67,10 @@ export interface RoomPlayer {
   queuedAddOn?: number;
   /** Leaving or kicked while in a live hand; removed once the hand settles */
   pendingLeave?: 'leave' | 'kick';
+  /** Bot seat at a bot table (no socket; the controller acts for it) */
+  isBot?: boolean;
+  /** Bots rebuy to this stack when busted */
+  botStack?: number;
 }
 
 export interface RoomStateView {
@@ -83,7 +87,10 @@ export interface RoomStateView {
     queuedAddOn?: number;
     playerId: string;
     leaving: boolean;
+    isBot: boolean;
   }>;
+  /** Set at bot tables: the spectator sees every card */
+  bot?: { scenario: string; label: string; description: string };
   settings: RoomSettings;
   ledger: LedgerRow[];
   state: 'lobby' | 'playing';
@@ -108,6 +115,8 @@ export interface PlayerStateView extends Omit<PlayerState, 'holeCards'> {
 export interface ClientToServerEvents {
   'create-room': (data: { playerName: string; settings: RoomSettings }) => void;
   'join-room': (data: { playerName: string; roomCode: string; token?: string }) => void;
+  /** Start a bot table from a scenario id (see bots.ts); the creator watches */
+  'create-bot-room': (data: { playerName: string; scenario: string }) => void;
   /** Buy-in in dollars */
   'sit-down': (data: { buyIn: number }) => void;
   'leave-room': () => void;

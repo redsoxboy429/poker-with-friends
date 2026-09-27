@@ -14,6 +14,7 @@ import {
   VARIANT_LABELS,
   GAME_CATEGORIES,
   LIMIT_VARIANTS,
+  BOT_SCENARIOS,
 } from './constants';
 
 // Persist name in localStorage
@@ -330,6 +331,23 @@ export default function LobbyPage() {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Watch-only bot tables for checking side pots, splits and caps */}
+        <div className="mt-6 bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+          <h2 className="text-sm font-semibold text-slate-200 mb-1">Watch bots</h2>
+          <p className="text-[11px] text-slate-500 mb-3">Bots play; you watch with every card face up. Uses your name above.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {BOT_SCENARIOS.map(s => (
+              <button key={s.id}
+                onClick={() => socketActions.createBotRoom(playerName.trim() || 'Watcher', s.id)}
+                disabled={socketState.status !== 'connected'}
+                className="text-left px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 transition-colors">
+                <div className="text-xs font-semibold text-white">{s.label}</div>
+                <div className="text-[10px] text-slate-400 leading-snug">{s.description}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Local Practice button */}
