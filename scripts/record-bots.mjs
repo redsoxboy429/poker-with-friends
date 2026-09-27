@@ -133,9 +133,11 @@ try {
     try { verdict = execFileSync(process.execPath, ['scripts/verify-hand-log.mjs', handsFile], { encoding: 'utf8' }); }
     catch (e) { verdict = String(e.stdout ?? e.message); }
   }
-  // Show each hand's caption from its completion until ~9s later (runout + result on screen).
+  // Show each hand's caption from when it ends until the next hand ends (max 25s):
+  // an all-in runout plays for up to ~10s before the result appears on the table.
   const t0 = frames.length ? frames[0].t : startWall;
-  const captions = hands.map((h, i) => ({ from: Date.parse(h.time) - t0, to: Date.parse(h.time) - t0 + 9000, n: i + 1, ...describeHand(h) }));
+  const ends = hands.map(h => Date.parse(h.time) - t0);
+  const captions = hands.map((h, i) => ({ from: ends[i], to: Math.min(ends[i + 1] ?? Infinity, ends[i] + 25000), n: i + 1, ...describeHand(h) }));
 
   // 4. Encode: replay frames onto a canvas in real time and let MediaRecorder make a WebM
   const enc = await newPage('about:blank');
@@ -182,8 +184,8 @@ try {
     await evaluate(enc, `window.__show(${JSON.stringify(f.data)}, ${JSON.stringify(cap)})`);
   }
   // Hold the last frame so late captions still show, then the verifier slate.
-  const tail = Math.max(0, ...captions.map(c => c.to)) - (frames.at(-1)?.t - t0 || 0);
-  for (let t = 0; t < Math.min(tail, 9000); t += 500) {
+  const tail = Math.max(0, ...captions.map(c => c.to).filter(Number.isFinite)) - (frames.at(-1)?.t - t0 || 0);
+  for (let t = 0; t < Math.min(tail, 8000); t += 500) {
     const at = (frames.at(-1)?.t - t0 || 0) + t;
     const cap = captions.filter(c => at >= c.from && at <= c.to).at(-1) ?? null;
     await evaluate(enc, `window.__cap = ${JSON.stringify(cap)}; true`);
