@@ -2,7 +2,7 @@
 // Room settings — validation and defaults (docs/NINE-GAME-RULES.md §2)
 // ============================================================
 
-import { GameMode, GameVariant, NINE_GAME_ROTATION } from 'poker-engine';
+import { GameMode, GameVariant, SELECTABLE_VARIANTS } from 'poker-engine';
 import type { RoomSettings } from './types.js';
 
 /** Smallest chip. Every stake, bet, buy-in, top-up and payout is a multiple of it. */
@@ -41,11 +41,11 @@ export function normalizeSettings(input: unknown, base?: RoomSettings): RoomSett
 
   let variant = pick('variant');
   if (gameMode === GameMode.SpecificGame) {
-    if (typeof variant !== 'string' || !NINE_GAME_ROTATION.includes(variant as GameVariant)) {
-      throw new Error('Select a nine-game variant');
+    if (typeof variant !== 'string' || !SELECTABLE_VARIANTS.includes(variant as GameVariant)) {
+      throw new Error('Select a game from the 10-game mix');
     }
-  } else if (variant !== undefined && (typeof variant !== 'string' || !NINE_GAME_ROTATION.includes(variant as GameVariant))) {
-    throw new Error('Select a nine-game variant');
+  } else if (variant !== undefined && (typeof variant !== 'string' || !SELECTABLE_VARIANTS.includes(variant as GameVariant))) {
+    throw new Error('Select a game from the 10-game mix');
   }
 
   const num = (k: keyof RoomSettings, fallback: number): number => {

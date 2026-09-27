@@ -87,14 +87,16 @@ export const GAME_MODE_LABELS: Record<string, string> = {
   [GameMode.Horse]: 'HORSE',
   [GameMode.EightGame]: '8-Game',
   [GameMode.NineGame]: '9-Game',
+  [GameMode.TenGame]: '10-Game',
   [GameMode.DealersChoice]: "Dealer's Choice",
   [GameMode.SpecificGame]: 'Specific Game',
 };
 
 export const GAME_MODE_DESC: Record<string, string> = {
   [GameMode.Horse]: 'LHE → O8 → Razz → Stud → Stud8',
-  [GameMode.EightGame]: 'HORSE + NLH, PLO, 27SD',
-  [GameMode.NineGame]: '8-Game + 27TD',
+  [GameMode.EightGame]: 'HORSE + NLH, PLO, 2-7 Triple Draw',
+  [GameMode.NineGame]: '8-Game + NL 2-7 Single Draw',
+  [GameMode.TenGame]: '9-Game + Badugi',
   [GameMode.DealersChoice]: 'Button picks the game',
   [GameMode.SpecificGame]: 'Choose one game',
 };
@@ -103,6 +105,7 @@ export const GAME_MODES: GameMode[] = [
   GameMode.Horse,
   GameMode.EightGame,
   GameMode.NineGame,
+  GameMode.TenGame,
   GameMode.DealersChoice,
   GameMode.SpecificGame,
 ];

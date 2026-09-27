@@ -41,7 +41,7 @@ describe('nine-game multiplayer boundaries', () => {
     const { controller, callbacks } = table(GameMode.DealersChoice, GameVariant.NLH, true);
     controller.startHand(); expect(callbacks.sendDcChoose).toHaveBeenCalledWith('s1');
     controller.handleVariantPick('p2', GameVariant.PLO); expect(controller.getState()).toBeNull();
-    controller.handleVariantPick('p1', GameVariant.Badugi); expect(controller.getState()).toBeNull();
+    controller.handleVariantPick('p1', GameVariant.PLBadugiDD); expect(controller.getState()).toBeNull();
     controller.handleVariantPick('p1', GameVariant.PLO); const id = controller.getState()!.id;
     controller.handleVariantPick('p1', GameVariant.NLH); expect(controller.getState()!.id).toBe(id);
   });

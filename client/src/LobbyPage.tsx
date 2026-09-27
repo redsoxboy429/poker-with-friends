@@ -74,7 +74,7 @@ export default function LobbyPage() {
 
   const isLimitGame = gameMode === GameMode.SpecificGame && LIMIT_VARIANTS.has(selectedVariant);
   // For mixed modes with limit games, always show limit fields
-  const showLimitFields = isLimitGame || gameMode === GameMode.Horse || gameMode === GameMode.EightGame || gameMode === GameMode.NineGame || gameMode === GameMode.DealersChoice;
+  const showLimitFields = isLimitGame || gameMode === GameMode.Horse || gameMode === GameMode.EightGame || gameMode === GameMode.NineGame || gameMode === GameMode.TenGame || gameMode === GameMode.DealersChoice;
 
   const handleCreate = () => {
     if (!playerName.trim()) return;

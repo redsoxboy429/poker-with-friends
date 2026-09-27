@@ -18,7 +18,7 @@
 // advances the session.
 
 import { GameVariant } from './types.js';
-import { GameMode, HORSE_ROTATION, EIGHT_GAME_ROTATION, NINE_GAME_ROTATION, HANDS_PER_VARIANT, CAP_RULES } from './session.js';
+import { GameMode, HORSE_ROTATION, EIGHT_GAME_ROTATION, NINE_GAME_ROTATION, TEN_GAME_ROTATION, SELECTABLE_VARIANTS, HANDS_PER_VARIANT, CAP_RULES } from './session.js';
 
 export interface PlannedHand {
   buttonSeat: number;
@@ -88,6 +88,7 @@ export class TableRotation {
     this.rotation = opts.mode === GameMode.Horse ? [...HORSE_ROTATION]
       : opts.mode === GameMode.EightGame ? [...EIGHT_GAME_ROTATION]
       : opts.mode === GameMode.NineGame ? [...NINE_GAME_ROTATION]
+      : opts.mode === GameMode.TenGame ? [...TEN_GAME_ROTATION]
       : [];
     if (opts.mode === GameMode.SpecificGame && !opts.variant) {
       throw new Error('SpecificGame mode requires a variant');
@@ -206,7 +207,7 @@ export class TableRotation {
   /** Dealer's choice: the chooser's pick for the planned segment. */
   choose(variant: GameVariant): PlannedHand {
     if (!this.plan || !this.plan.needsChoice) throw new Error('No game choice is pending');
-    if (!NINE_GAME_ROTATION.includes(variant)) throw new Error('Select a nine-game variant');
+    if (!SELECTABLE_VARIANTS.includes(variant)) throw new Error('Select a game from the 10-game mix');
     this.plan.next.chosenVariant = variant;
     this.plan.variant = variant;
     this.plan.needsChoice = false;

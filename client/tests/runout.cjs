@@ -17,7 +17,7 @@ function load(file,overrides={},append='') {
   const exports={};const context={exports,module:{exports},console,window:{location:{port:'5173',origin:'http://localhost:5173'}},localStorage:{getItem:()=>''},navigator:{},setTimeout:timer,clearTimeout:id=>timers.delete(id),require:id=>{
     if(id in overrides)return overrides[id];
     if(id==='react'||id==='react/jsx-runtime')return testRequire(id);
-    if(id.includes('engine-wrapper'))return {...E, PLAYABLE_VARIANTS: E.NINE_GAME_ROTATION};
+    if(id.includes('engine-wrapper'))return {...E, PLAYABLE_VARIANTS: E.SELECTABLE_VARIANTS};
     if(id==='@engine/presentation.ts')return E;
     if(id==='react-router-dom')return {useNavigate:()=>()=>{},useParams:()=>({code:'TEST'})};
     if(id==='socket.io-client')return {io:()=>{}};
@@ -50,8 +50,8 @@ function mockComponents(){return Object.fromEntries(['CardDisplay','PlayerSeat',
   const options={canFold:true,canCheck:false,canCall:true,callAmount:2,canBet:false,minBet:0,maxBet:0,canRaise:true,minRaise:3,maxRaise:3};
   await act(()=>{renderer=Renderer.create(React.createElement(Panel,{actions:options,onAction:(...args)=>sent=args,bettingStructure:E.BettingStructure.NoLimit,minChip:0.25}));});
   const button=renderer.root.findAllByType('button').find(n=>n.children.includes('Raise '));assert(button);await act(()=>button.props.onClick());assert.equal(sent[1],3);results.push({name:'C04: exact all-in raise sends the legal amount',legalRaiseTo:3,sent});await act(()=>renderer.unmount());
-  assert.equal(constants.ALL_VARIANTS.slice().sort().join(','), E.NINE_GAME_ROTATION.slice().sort().join(','));
+  assert.equal(constants.ALL_VARIANTS.slice().sort().join(','), E.SELECTABLE_VARIANTS.slice().sort().join(','));
   assert.equal(timers.size,0);
   for(const r of results)console.log('PASS '+r.name);
-  console.log('PASS nine-game selector and unmount timer cleanup');
+  console.log('PASS ten-game selector and unmount timer cleanup');
 })().catch(e=>{console.error(e);process.exitCode=1;});

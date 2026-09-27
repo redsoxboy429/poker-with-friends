@@ -58,6 +58,15 @@ describe('TableRotation — rotation modes', () => {
     expect(hands[17].button).toBe(0);
   });
 
+  it('10-game plays Badugi last, as a blind game (the button moves)', () => {
+    const rot = new TableRotation({ mode: GameMode.TenGame });
+    const hands = play(rot, [0, 1, 2], 10 * HANDS_PER_VARIANT + 1);
+    const badugi = hands.slice(72, 80);
+    expect(badugi.every(h => h.variant === GameVariant.Badugi)).toBe(true);
+    expect(new Set(badugi.map(h => h.button)).size).toBe(3);
+    expect(hands[80].variant).toBe(GameVariant.LimitHoldem);
+  });
+
   it('wraps the rotation after the last game', () => {
     const rot = new TableRotation({ mode: GameMode.Horse });
     const hands = play(rot, [0, 1], 5 * HANDS_PER_VARIANT + 1);
@@ -114,10 +123,10 @@ describe('TableRotation — dealer\'s choice', () => {
     expect(replanned).toMatchObject({ needsChoice: true, chooserSeat: 2, buttonSeat: 2 });
   });
 
-  it('only nine-game variants can be chosen, and only while a choice is pending', () => {
+  it('only 10-game variants can be chosen, and only while a choice is pending', () => {
     const rot = new TableRotation({ mode: GameMode.DealersChoice });
     rot.nextHand([0, 1]);
-    expect(() => rot.choose(GameVariant.Badugi)).toThrow();
+    expect(() => rot.choose(GameVariant.PLBadugiDD)).toThrow();
     rot.choose(GameVariant.Razz);
     expect(() => rot.choose(GameVariant.NLH)).toThrow();
   });

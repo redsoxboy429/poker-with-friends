@@ -81,9 +81,9 @@ Adding a new variant: ~20-30 lines (constructor + evaluateHand override + factor
 - React + Vite + Tailwind (client), Socket.io (multiplayer), Express (server)
 - No external dependencies for core engine (crypto is built-in)
 
-## Variants: 9 selectable (nine-game), 29 in the engine
+## Variants: 10 selectable (10-game mix), 29 in the engine
 
-Selectable in the app and accepted by the server: the WSOP nine-game mix — LHE, O8, Razz, Stud, Stud8, NLH, PLO, 2-7 Triple Draw, NL 2-7 Single Draw. The rest stay in the engine, unselectable. Full list of engine variants:
+Selectable in the app and accepted by the server: the WSOP 10-game mix — LHE, O8, Razz, Stud, Stud8, NLH, PLO, 2-7 Triple Draw, NL 2-7 Single Draw, Badugi (limit triple draw). Modes: HORSE, 8-Game, 9-Game, 10-Game, Dealer's Choice, Specific Game. The rest stay in the engine, unselectable. Full list of engine variants:
 
 **Flop:** NLH, LHE, PLO, O8 (Limit), PLO8, Limit Omaha High
 **Stud:** Razz, 7-Card Stud, Stud Hi-Lo

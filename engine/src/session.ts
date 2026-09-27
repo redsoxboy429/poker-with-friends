@@ -9,6 +9,7 @@ export enum GameMode {
   Horse = 'horse',
   EightGame = '8-game',
   NineGame = '9-game',
+  TenGame = '10-game',
   DealersChoice = 'dealers-choice',
   SpecificGame = 'specific',
 }
@@ -35,6 +36,15 @@ export const NINE_GAME_ROTATION: GameVariant[] = [
   ...EIGHT_GAME_ROTATION,
   GameVariant.TwoSevenSD,
 ];
+
+/** WSOP 10-game: 9-game + Badugi (limit triple draw). */
+export const TEN_GAME_ROTATION: GameVariant[] = [
+  ...NINE_GAME_ROTATION,
+  GameVariant.Badugi,
+];
+
+/** Games that can be selected in the app and are accepted by the server (the 10-game mix). */
+export const SELECTABLE_VARIANTS: GameVariant[] = [...TEN_GAME_ROTATION];
 
 /** Hands per variant in rotation modes */
 export const HANDS_PER_VARIANT = 8;
@@ -134,6 +144,9 @@ export class GameSession {
         break;
       case GameMode.NineGame:
         this.rotation = [...NINE_GAME_ROTATION];
+        break;
+      case GameMode.TenGame:
+        this.rotation = [...TEN_GAME_ROTATION];
         break;
       case GameMode.DealersChoice:
         this.rotation = []; // No fixed rotation

@@ -12,7 +12,7 @@ import {
   ActionType,
   BettingStructure,
   GameMode,
-  NINE_GAME_ROTATION,
+  SELECTABLE_VARIANTS,
   TableRotation,
   planShowdown,
   createGame,
@@ -175,8 +175,8 @@ export class GameController {
   handleVariantPick(playerId: string, variant: GameVariant): void {
     const player = this.getRoomPlayer(playerId);
     if (!player) return;
-    if (this.hostPaused || this.pendingChooserSeat !== player.seatIndex || !NINE_GAME_ROTATION.includes(variant)) {
-      this.callbacks.sendError(player.socketId, 'Only the current chooser may pick a nine-game variant');
+    if (this.hostPaused || this.pendingChooserSeat !== player.seatIndex || !SELECTABLE_VARIANTS.includes(variant)) {
+      this.callbacks.sendError(player.socketId, 'Only the current chooser may pick a game from the 10-game mix');
       return;
     }
     if (!this.getActivePlayers().includes(player)) {
@@ -718,7 +718,7 @@ export class GameController {
 
   /** Change the game mode between hands (host only). The button continues left. */
   updateGameMode(mode: GameMode, variant?: GameVariant): void {
-    if (variant && !NINE_GAME_ROTATION.includes(variant)) throw new Error('Select a nine-game variant');
+    if (variant && !SELECTABLE_VARIANTS.includes(variant)) throw new Error('Select a game from the 10-game mix');
     if (this.liveState() || this.pendingChooserSeat !== null) throw new Error('Change games between hands');
     this.rotation = new TableRotation({ mode, variant, startAfterSeat: this.rotation.getLastButtonSeat() });
   }

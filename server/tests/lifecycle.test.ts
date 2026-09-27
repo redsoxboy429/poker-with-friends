@@ -52,8 +52,8 @@ describe('settings validation (§2)', () => {
     expect(normalizeSettings({ bigBlind: 1, smallBlind: 0.5 }, base)).toMatchObject({ ante: 0.25, bringIn: 0.5, buyInMax: 300 });
   });
 
-  it('only accepts nine-game variants', () => {
-    expect(() => normalizeSettings({ ...NL, variant: GameVariant.Badugi })).toThrow('nine-game');
+  it('only accepts games from the 10-game mix', () => {
+    expect(() => normalizeSettings({ ...NL, variant: GameVariant.PLBadugiDD })).toThrow('10-game mix');
   });
 });
 

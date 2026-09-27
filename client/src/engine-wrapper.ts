@@ -24,12 +24,14 @@ import {
   HORSE_ROTATION,
   EIGHT_GAME_ROTATION,
   NINE_GAME_ROTATION,
+  TEN_GAME_ROTATION,
+  SELECTABLE_VARIANTS,
   type GameSessionConfig,
   type GameSessionState,
 } from '@engine/session.ts';
 
 export type { HandState, AvailableActions, PlayerState, GameSessionConfig, GameSessionState, WinnerInfo };
-export { GameVariant, GamePhase, ActionType, BettingStructure, GameSession, GameMode, HORSE_ROTATION, EIGHT_GAME_ROTATION, NINE_GAME_ROTATION };
+export { GameVariant, GamePhase, ActionType, BettingStructure, GameSession, GameMode, HORSE_ROTATION, EIGHT_GAME_ROTATION, NINE_GAME_ROTATION, TEN_GAME_ROTATION, SELECTABLE_VARIANTS };
 
 /** Human-readable display names for each variant */
 export const VARIANT_NAMES: Record<GameVariant, string> = {
@@ -65,7 +67,7 @@ export const VARIANT_NAMES: Record<GameVariant, string> = {
 };
 
 /** Initial validated scope: the nine-game mix. */
-export const PLAYABLE_VARIANTS: GameVariant[] = [...NINE_GAME_ROTATION];
+export const PLAYABLE_VARIANTS: GameVariant[] = [...SELECTABLE_VARIANTS];
 
 /** Create default players for local play.
  * Last bot gets a short stack (20% of starting chips) for side pot testing. */

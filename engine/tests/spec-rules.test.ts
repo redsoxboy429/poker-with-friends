@@ -5,7 +5,8 @@ import { describe, it, expect } from 'vitest';
 import {
   NLHGame, LHEGame, StudGame, StudHiLoGame, RazzGame, O8Game,
   GamePhase, ActionType, GameVariant, BettingStructure, CHIP_UNIT,
-  parseCards, createDeck, evaluate5CardHigh, planShowdown, type PlayerState, type TableConfig, type BaseGame, type Card,
+  parseCards, createDeck, evaluate5CardHigh, evaluateBadugi, planShowdown, createGame,
+  NINE_GAME_ROTATION, TEN_GAME_ROTATION, SELECTABLE_VARIANTS, type PlayerState, type TableConfig, type BaseGame, type Card,
 } from '../src/index.js';
 
 const players = (count: number, chips = 100): PlayerState[] => Array.from({ length: count }, (_, i) => ({
@@ -86,6 +87,40 @@ describe('Showdown descriptions include kickers (Josh 2026-09-23)', () => {
     expect(d('Ah Kh 9h 7h 4h')).toBe('Flush, A-K-9-7-4');
     expect(d('Ah Kd 9h 7c 4s')).toBe('Ace-high, K-9-7-4');
     expect(d('9h 8d 7h 6c 5s')).toBe('Straight, 9-high');
+  });
+});
+
+describe('Badugi (10-game, added 2026-09-26)', () => {
+  const v = (cards: string) => evaluateBadugi(parseCards(cards), true).value;
+  it('ranks by number of cards first, then the highest card down, aces low', () => {
+    const order = [
+      'As 2h 3d 4c', // best: four-card A-2-3-4
+      'As 2h 3d 5c',
+      '2s 3h 4d 5c',
+      'As 2h 3d Kc', // four-card king beats every three-card hand
+      'As 2h 3d 3c', // three-card A-2-3 (pair plays as three cards)
+      'As 2s 3d 4c', // three-card A-3-4 (suited pair of cards)
+      'Ks Qh Jd Jc', // three-card K-Q-J
+      'As 2s 3s 4h', // two-card A-4
+      'As 2s 3s 4s', // one card: ace
+    ];
+    for (let i = 1; i < order.length; i++) expect(v(order[i - 1]), `${order[i - 1]} beats ${order[i]}`).toBeGreaterThan(v(order[i]));
+    expect(v('As 2h 3d 4c')).toBe(v('Ad 2c 3h 4s')); // suits never break ties
+  });
+
+  it('is limit triple draw with 4 cards, blinds, and an ace-low evaluator', () => {
+    const game = createGame(GameVariant.Badugi, players(3), 0, { ...LIMIT, variant: GameVariant.Badugi });
+    game.start();
+    const s = game.getState();
+    expect(s.bettingStructure).toBe(BettingStructure.FixedLimit);
+    expect(s.players.every(p => p.holeCards.length === 4)).toBe(true);
+    expect(s.drawsRemaining).toBe(3);
+    expect(s.bigBlind).toBe(2);
+  });
+
+  it('is in the 10-game rotation and selectable', () => {
+    expect(TEN_GAME_ROTATION).toEqual([...NINE_GAME_ROTATION, GameVariant.Badugi]);
+    expect(SELECTABLE_VARIANTS).toEqual(TEN_GAME_ROTATION);
   });
 });
 
