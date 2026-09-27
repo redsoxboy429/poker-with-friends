@@ -125,6 +125,12 @@ export class GameController {
 
   /** Host's Deal Now: also lifts a host pause, so it never needs a separate resume. */
   dealNow(): void {
+    const idle = !this.liveState() && !this.presenting && this.pendingChooserSeat === null;
+    if (this.hostPaused && !idle) {
+      // Mid-hand, during the result or a pending pick: just resume (broadcasts and restores timers).
+      this.resumeCountdown();
+      return;
+    }
     if (this.hostPaused) {
       this.hostPaused = false;
       this.countdownPaused = false;
@@ -151,6 +157,11 @@ export class GameController {
     if (activePlayers.length < 2) {
       this.callbacks.sendError(this.room.hostSocketId, 'Need at least 2 players to start');
       this.callbacks.broadcastRoomState(this.room.code);
+      // Wait for players: a sit-in or buy-in resumes the countdown automatically.
+      if (this.room.state === 'playing') {
+        this.countdownPaused = true;
+        this.callbacks.broadcastCountdown(this.room.code, -1);
+      }
       return;
     }
 
@@ -243,6 +254,7 @@ export class GameController {
     } catch (err) {
       this.rotation.cancelPlan();
       this.chipsBehind = {};
+      this.callbacks.broadcastChoicePending?.(this.room.code, null);
       const message = err instanceof Error ? err.message : 'Failed to deal hand';
       console.error('[game-controller] dealHand error:', message);
       this.callbacks.sendError(this.room.hostSocketId, message);
@@ -441,6 +453,8 @@ export class GameController {
     this.pendingChooserSeat = null;
     this.clearChoiceTimer();
     this.rotation.cancelPlan();
+    // Clear everyone's "waiting for X"; startHand announces the next chooser, if any.
+    this.callbacks.broadcastChoicePending?.(this.room.code, null);
     if (!this.hostPaused) this.startHand();
   }
 

@@ -1,10 +1,29 @@
-# Nine-Game Test Session — guided script
+# Ten-Game Test Session — guided script
 
 For Josh's multi-device test. Automated checks (`npm run check`) cover the rules and lifecycle logic. This script covers what only a person can judge: how it looks and feels across real devices.
 
-**Setup:** three devices (e.g. laptop, phone, tablet) as A (host), B and C. Run locally with `npm run dev` (client on http://localhost:5173) or on the deployed build once it's pushed. Note anything odd with the time and which device.
+**Setup:** three devices (e.g. laptop, phone, tablet) as A (host), B and C. In the `poker-with-friends` folder, run `npm.cmd run build`, then `$env:NODE_ENV='production'; npm.cmd start`. Open `http://localhost:3001` on the PC and `http://<PC IPv4>:3001` on phones on the same Wi-Fi. Each player needs a separate browser or device; two tabs in one browser share a seat. Note anything odd with the time and which device.
 
-Rules reference: `docs/NINE-GAME-RULES.md`.
+Rules reference: `docs/NINE-GAME-RULES.md` (the ten-game spec).
+
+## Round 2 (2026-09-26): what changed since the first session
+
+Run this section first. Sections 1–6 below are the full regression script if there's time.
+
+| # | Do | Expect |
+|---|---|---|
+| R1 | Look at the table during any flop or draw hand | A yellow **D** chip on the felt beside the button seat, as well as the D by the name |
+| R2 | Host pauses, then presses **Deal Now** | The hand deals immediately; no resume step needed |
+| R3 | Deal 5+ PLO hands in a row, then 5+ O8 hands | No flash of cards before the deal animation, including right after a showdown |
+| R4 | Get two players to showdown with the same pair or trips (NLH or Stud) | Winner labels show kickers, e.g. "Three Jacks, K-9 kickers". The bottom-of-screen hand line stays short. |
+| R5 | 8-, 9- or 10-Game (or DC) with everyone bought in above $75, playing NLH or PLO | Seats show "**+$X behind**". Center tracker shows "Cap 150BB". 2-7 Single Draw shows "Cap 30BB". A Specific Game of NLH has no cap. |
+| R6 | NLH and PLO betting | **33%**, **67%** and **Pot** buttons set the amount (PLO keeps its single Pot button). Amounts are whole $0.25. The chosen amount is accepted when you bet. |
+| R7 | Stud all-in on 3rd or 4th street | The remaining streets are dealt starting with the player to the left of the D |
+| R8 | Dealer's Choice: finish a hand, then Deal Now (or let the countdown run out) | The table clears. Everyone sees "Waiting for **Name** to choose the game", and the chooser sees the picker. After the pick, the new hand deals normally. |
+| R9 | Any mixed mode | The tracker ("Hand x/8 • Game x/10 • Cap …") shows in the center of the table under the game name, as well as top left |
+| R10 | HORSE: play through O8 into Razz, Stud, Stud8, then back to LHE | During the stud games the D stays on the same seat. The first LHE hand moves it one seat left. At H→O the D just keeps moving one seat per hand. |
+| R11 | **Badugi** as a Specific Game, then in 10-Game and Dealer's Choice | 4 cards each, three draws, limit betting (small bet for two rounds, big bet for two). Discarding works through the usual card-select controls. The hand line reads like "Badugi: 7-4-2-A" (a full badugi) or "3-card: 3-2-A". A four-card hand beats any three-card hand, then the lowest top card wins. |
+| R12 | **10-Game** mode from the lobby and from the host Game menu | The rotation is H, O, R, S, E, NLH, PLO, 2-7 TD, 2-7 SD, Badugi (8 hands each), and the tracker shows Game x/10 |
 
 ## 1. Room and seats
 

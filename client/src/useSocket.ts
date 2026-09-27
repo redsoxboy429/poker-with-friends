@@ -148,6 +148,7 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         sessionState: action.sessionState ?? state.sessionState,
         chipsBehind: action.chipsBehind ?? null,
         choosingPlayer: null, // a hand is being dealt, so no choice is pending
+        dcChoosing: false,
         ...(clearWinners ? { winners: null, finalState: null, handDescriptions: null, countdown: null } : {}),
       };
     }
@@ -162,13 +163,20 @@ function socketReducer(state: SocketState, action: SocketAction): SocketState {
         handDescription: null, // Clear stale hand description
         isYourTurn: false,
         availableActions: null,
+        // A hand can complete the moment it is dealt (all-in on the blinds): it still ends any pick
+        choosingPlayer: null,
+        dcChoosing: false,
       };
 
     case 'DC_CHOOSE':
       return { ...state, dcChoosing: true };
 
-    case 'CHOICE_PENDING':
-      return { ...state, choosingPlayer: action.chooser ?? { name: 'the dealer', seatIndex: -1 } };
+    case 'CHOICE_PENDING': {
+      // null = no choice pending any more (the pick fell through or the table is waiting for players)
+      if (!action.chooser) return { ...state, choosingPlayer: null, dcChoosing: false };
+      const mySeat = state.roomState?.players.find(p => p.playerId === state.yourPlayerId)?.seatIndex;
+      return { ...state, choosingPlayer: action.chooser, dcChoosing: action.chooser.seatIndex === mySeat };
+    }
 
     case 'DC_PICKED':
       return { ...state, dcChoosing: false };

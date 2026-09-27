@@ -93,7 +93,7 @@ Selectable in the app and accepted by the server: the WSOP 10-game mix — LHE, 
 
 ## Current Status
 
-**Nine-game stabilization — built and audited on branch `codex/nine-game-stabilization`, awaiting Josh's multi-device test** (as of 2026-09-23). Not yet pushed; Railway (`poker-with-friends-production.up.railway.app`) still runs the old `main`.
+**Ten-game build (9-game + Badugi) — built and audited on branch `codex/nine-game-stabilization`; Josh's first device test done 2026-09-23, fixes and Badugi/10-Game added 2026-09-26, awaiting round 2** (`docs/TEST-SESSION.md`, "Round 2" section). Not yet pushed; Railway (`poker-with-friends-production.up.railway.app`) still runs the old `main`.
 
 - Rules: `docs/NINE-GAME-RULES.md` (signed off by Josh; tests are written from it, not from the code).
 - Progress and known limits: `reviews/2026-09-23/CLAUDE-CHECKPOINT.md`. Codex's original review: `reviews/2026-09-17/`.

@@ -5,7 +5,7 @@
 // never by position in a compacted list of active players, so empty and
 // sitting-out seats cannot shift the button or the chooser.
 //
-// Rotation modes (HORSE / 8-game / 9-game): each game plays HANDS_PER_VARIANT
+// Rotation modes (HORSE / 8 / 9 / 10-game): each game plays HANDS_PER_VARIANT
 // hands. The button moves one occupied seat per hand in blind games, straight
 // through game changes, and stands still during stud (docs/NINE-GAME-RULES.md §1).
 //
@@ -131,7 +131,7 @@ export class TableRotation {
     let newSegment = false;
 
     if (this.rotation.length > 0) {
-      // HORSE / 8-game / 9-game (spec §1): 8 hands per game. In blind games the
+      // HORSE / 8 / 9 / 10-game (spec §1): 8 hands per game. In blind games the
       // button moves one occupied seat every hand, straight through game
       // changes. In stud games it stays put, and the next blind game passes it
       // to the left of wherever it stopped.
@@ -149,7 +149,10 @@ export class TableRotation {
       } else {
         buttonSeat = this.nextSeat(occupied, c.lastButtonSeat);
       }
-      next.lastButtonSeat = buttonSeat;
+      // During stud the button stays frozen on its seat even if that player is
+      // briefly away (a stand-in seat is used for this hand only), so the next
+      // blind game still passes it to the left of where it stopped.
+      next.lastButtonSeat = STUD_VARIANTS.has(variant) && c.lastButtonSeat !== null ? c.lastButtonSeat : buttonSeat;
       next.handsInSegment += 1;
       this.plan = { buttonSeat, variant, chooserSeat: null, needsChoice: false, newSegment, next };
       return this.publicPlan()!;

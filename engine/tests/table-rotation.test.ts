@@ -58,6 +58,17 @@ describe('TableRotation — rotation modes', () => {
     expect(hands[17].button).toBe(0);
   });
 
+  it('a stand-in during stud does not move the frozen button: the next blind game passes left of the original seat', () => {
+    const rot = new TableRotation({ mode: GameMode.Horse });
+    // Seat 3 holds the O8 button, is away for part of Razz, then returns before LHE.
+    const seats = (i: number) => (i >= 18 && i < 20 ? [0, 1, 2, 4, 5] : [0, 1, 2, 3, 4, 5]);
+    const hands = play(rot, seats, 41);
+    expect(hands[15].button).toBe(3);
+    expect(hands[18].button).toBe(4); // stand-in while seat 3 is away
+    expect(hands[25].button).toBe(3); // back on the frozen seat
+    expect(hands[40]).toMatchObject({ variant: GameVariant.LimitHoldem, button: 4 });
+  });
+
   it('10-game plays Badugi last, as a blind game (the button moves)', () => {
     const rot = new TableRotation({ mode: GameMode.TenGame });
     const hands = play(rot, [0, 1, 2], 10 * HANDS_PER_VARIANT + 1);

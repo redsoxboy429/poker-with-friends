@@ -386,6 +386,8 @@ export default function MultiplayerTable() {
     const isReal = nonFolded > 1;
 
     clearAnimTimers();
+    // A hand that completes at the deal never got a hand-state: its counts belong to it now.
+    setAnimHandId(finalState.id);
     const plan = planShowdown(finalState);
     // Reveal surviving hands, retaining only cards dealt before the runout.
     // Folded players → 0 (cards disappear), others → full count
@@ -1114,8 +1116,23 @@ export default function MultiplayerTable() {
             currentBet={gameState.currentBet}
           />
         ) : awaitingChoice ? (
-          <div className="text-center text-slate-400 text-xs py-2">
-            {socketState.dcChoosing ? 'Your pick: choose the game' : <>Waiting for <span className="text-amber-300 font-semibold">{choosingName}</span> to choose the game</>}
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-center text-slate-400 text-xs">
+              {socketState.dcChoosing ? 'Your pick: choose the game' : <>Waiting for <span className="text-amber-300 font-semibold">{choosingName}</span> to choose the game</>}
+            </div>
+            {socketState.countdown === -1 && <span className="text-sm font-mono text-amber-400">Paused</span>}
+            {socketState.isHost && (
+              <div className="flex gap-2">
+                <button onClick={() => socketActions.startHand()}
+                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-all active:scale-95">
+                  Deal Now
+                </button>
+                <button onClick={() => socketState.countdown === -1 ? socketActions.resumeCountdown() : socketActions.pauseCountdown()}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs font-semibold transition-colors">
+                  {socketState.countdown === -1 ? 'Resume' : 'Pause'}
+                </button>
+              </div>
+            )}
           </div>
         ) : showdownNow ? (
           <div className="flex flex-col items-center gap-2">

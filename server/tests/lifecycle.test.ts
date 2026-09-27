@@ -260,6 +260,32 @@ describe('Josh test-session feedback (2026-09-23)', () => {
     expect(Object.values(behind).reduce((a, b) => a + b, 0) + 150).toBe(300);
   });
 
+  it('clears the waiting state when a pick falls through, and resumes once players return', () => {
+    const { room, controller, callbacks } = table(2, DC);
+    const pending = vi.fn();
+    callbacks.broadcastChoicePending = pending;
+    controller.startHand();
+    room.players.get('s0')!.sittingOut = true;
+    controller.handleSeatVacated(0);
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), null); // only one player left: nobody chooses
+    expect(controller.isPaused()).toBe(true);
+    room.players.get('s0')!.sittingOut = false;
+    controller.autoResumeIfReady();
+    vi.advanceTimersByTime(15_000);
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ seatIndex: expect.any(Number) }));
+  });
+
+  it('Deal Now while paused mid-hand resumes play instead of silently unpausing', () => {
+    const { controller, callbacks } = table(2);
+    controller.startHand();
+    const id = controller.getState()!.id;
+    controller.pauseCountdown();
+    controller.dealNow();
+    expect(controller.getState()!.id).toBe(id); // no second deal
+    expect(controller.isPaused()).toBe(false);
+    expect(callbacks.broadcastCountdown).toHaveBeenLastCalledWith(expect.any(String), 0); // clients told
+  });
+
   it('tells everyone who is choosing the next dealer\'s-choice game', () => {
     const { controller, callbacks } = table(2, DC);
     const pending = vi.fn();
