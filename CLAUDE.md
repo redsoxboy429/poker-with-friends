@@ -91,6 +91,12 @@ Selectable in the app and accepted by the server: the WSOP 10-game mix — LHE, 
 **Drawmaha:** 4 PL + 4 Limit (High, 2-7, A-5, 49)
 **PL Double Draw:** Badugi, Badeucy, Badacey, Archie, 10-30
 
+## Testing Tools (added 2026-09-27)
+- **Local production run:** `npm run build`, then `node scripts/serve-prod.mjs` (port 3001, phones via the PC's LAN IP). The workspace launch config has a `poker` entry for the preview panel. It writes the hand log (below).
+- **Watch bots** (lobby): bot tables for side pots, hi/lo & quartering, caps, draw games and the 10-game soak (`server/src/bots.ts`). The spectator sees every card; humans can't sit.
+- **Hand log:** one JSON line per finished hand in `logs/hands-YYYY-MM-DD.jsonl` (production or `HAND_LOG_DIR`; gitignored).
+- **Scripts:** `scripts/bot-soak.mjs [hands]` (headless bot run to `logs/soak/`), `scripts/verify-hand-log.mjs [path]` (independent checks: conservation, payouts, side-pot eligibility, caps, $0.25 chips, duplicate cards), `scripts/hand-report.mjs <out.html> [path]` (filterable hand history), `scripts/record-bots.mjs <scenario> <seconds>` (captioned WebM via headless Edge to `recordings/`, gitignored; needs the local server running).
+
 ## Current Status
 
 **Ten-game build (9-game + Badugi) — built and audited on branch `codex/nine-game-stabilization`; Josh's first device test done 2026-09-23, fixes and Badugi/10-Game added 2026-09-26, awaiting round 2** (`docs/TEST-SESSION.md`, "Round 2" section). Not yet pushed; Railway (`poker-with-friends-production.up.railway.app`) still runs the old `main`.
