@@ -108,6 +108,14 @@ describe('Badugi (10-game, added 2026-09-26)', () => {
     expect(v('As 2h 3d 4c')).toBe(v('Ad 2c 3h 4s')); // suits never break ties
   });
 
+  it('compares past the top card, card by card (Josh 2026-09-26)', () => {
+    expect(v('8s 3h 2d Ac')).toBeGreaterThan(v('8s 4h 2d Ac')); // best 8-high badugi
+    expect(v('8s 3h 2d Ac')).toBeGreaterThan(v('8s 7h 6d 5c'));
+    expect(v('9s 6h 4d 2c')).toBeGreaterThan(v('9s 7h 2d Ac')); // second card decides
+    expect(v('9s 6h 4d 3c')).toBeGreaterThan(v('9s 6h 5d 2c')); // third card decides
+    expect(v('9s 6h 4d Ac')).toBeGreaterThan(v('9s 6h 4d 2c')); // fourth card decides
+  });
+
   it('is limit triple draw with 4 cards, blinds, and an ace-low evaluator', () => {
     const game = createGame(GameVariant.Badugi, players(3), 0, { ...LIMIT, variant: GameVariant.Badugi });
     game.start();
