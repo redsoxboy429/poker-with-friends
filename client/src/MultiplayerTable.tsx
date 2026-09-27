@@ -752,11 +752,13 @@ export default function MultiplayerTable() {
           {trackerText && <span className="text-[10px] text-slate-500 font-mono">{trackerText}</span>}
         </div>
         <div className="flex gap-1 items-center">
-          {/* Sit Out / Sit In */}
-          <button onClick={() => myRoomPlayer?.sittingOut ? socketActions.sitIn() : socketActions.sitOut()}
-            className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-              myRoomPlayer?.sittingOut ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
-            }`}>{myRoomPlayer?.sittingOut ? 'Sit In' : 'Sit Out'}</button>
+          {/* Sit Out / Sit In (seated players only; spectators have no seat) */}
+          {myRoomPlayer?.seated && (
+            <button onClick={() => myRoomPlayer.sittingOut ? socketActions.sitIn() : socketActions.sitOut()}
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                myRoomPlayer.sittingOut ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+              }`}>{myRoomPlayer.sittingOut ? 'Sit In' : 'Sit Out'}</button>
+          )}
           {/* Add On (always visible, queues during hand) */}
           {myRoomPlayer?.seated && (
             <button onClick={handleAddOnOpen}

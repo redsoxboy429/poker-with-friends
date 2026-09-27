@@ -59,6 +59,15 @@ export const BOT_SCENARIOS: BotScenario[] = [
     picks: [GameVariant.NLH, GameVariant.PLO, GameVariant.TwoSevenSD],
   },
   {
+    id: 'draw-games',
+    label: 'Draw games',
+    description: "Dealer's choice between 2-7 Triple Draw, Badugi and NL 2-7 Single Draw, to watch the draw tracker",
+    settings: { gameMode: GameMode.DealersChoice, smallBlind: 0.25, bigBlind: 0.5, smallBet: 2, bigBet: 4, buyInMin: 25, buyInMax: 300 },
+    stacks: [80, 100, 120, 150],
+    style: { shove: 0.03, raise: 0.12, call: 0.75 },
+    picks: [GameVariant.TwoSevenTD, GameVariant.Badugi, GameVariant.TwoSevenSD],
+  },
+  {
     id: 'ten-game',
     label: '10-Game soak',
     description: 'The full 10-Game rotation with five bots and mixed stacks',
