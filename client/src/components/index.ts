@@ -6,4 +6,5 @@ export { PlayerSeat } from './PlayerSeat';
 export { WinDisplay } from './WinDisplay';
 export type { WinEntry } from './WinDisplay';
 export { ActionPanel } from './ActionPanel';
+export { PreActionPanel } from './PreActionPanel';
 export { GameLog } from './GameLog';

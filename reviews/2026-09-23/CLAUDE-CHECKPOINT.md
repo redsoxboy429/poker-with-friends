@@ -1,6 +1,6 @@
 # Nine-game build — Claude checkpoint (2026-09-23, build complete)
 
-Branch `codex/nine-game-stabilization`. **Nothing pushed or deployed.** Spec: `docs/NINE-GAME-RULES.md` (signed off). Test script for Josh: `docs/TEST-SESSION.md`.
+Branch `codex/nine-game-stabilization`. **Branch pushed to GitHub 2026-09-28; not merged to `main`, not deployed** (see `CLAUDE.md` Current Status). Spec: `docs/NINE-GAME-RULES.md` (signed off). Test script for Josh: `docs/TEST-SESSION.md`.
 
 ## Status: ready for Josh's multi-device test
 

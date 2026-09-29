@@ -138,3 +138,28 @@ Append-only log of session learnings. Reviewed during /weekly-review.
 - Learned: **Check existing implementations before planning new features.** Reconnect, sit-out, and session tracking were all server-complete — just needed UI wiring or socket event additions. Saved significant time vs building from scratch.
 - Learned: GameSession architecture is clean — all rotation/DC/cap tracking lives in one class with a single getState() snapshot method. Adding the tracker was just broadcasting that snapshot.
 - Next: Josh doing thorough multi-device testing. Then Session 4 security audit. Sound deferred to post-launch.
+
+## 2026-09-27 — Ten-game build, bots, recordings
+
+**Project:** poker-with-friends
+**Duration:** deep (multi-day, compacted twice)
+
+- Built: 9-game spec + build on Codex's baseline; round-1 fixes (button chip, Deal Now resume, kickers, 33/67/Pot, caps 150/30 in mixed modes, DC "waiting for", center tracker); Badugi + 10-Game; draw tracker; readable "+$X behind"; Watch-bots tables; JSONL hand log + verifier + HTML hand report; headless-Edge WebM recorder. `npm run check` green (472 engine / 81 server); 4,995-hand soak passes the verifier.
+- Hard: Chrome extension wasn't connected, so GIF capture failed → built CDP + MediaRecorder in headless Edge instead. Stud bring-in change hung the test playout loop. Busted bots stalled a table until their rebuy moved to settlement.
+- Surprising: the "cap not working in 8/9-game" report was a display problem; the server was enforcing it. The client reads engine types from engine/dist, so the engine has to be rebuilt after type changes.
+- Learned: an independent log verifier (chip conservation, payouts, side-pot eligibility) catches real bugs faster than watching tables. Captions need to stay up until the next hand ends, because runouts take about 10s.
+- Decided: rotation = 8 hands/game; the button moves every hand in blind games and freezes during stud, then passes left; DC button goes on the chooser; caps apply to mixed modes only; top-up is TO an amount; Badugi compares past the top card.
+- Hard: the hacker-bot security test was stopped by a safety check partway through launch. No results; handing it off to a fresh session.
+- Next: security test (new session); Josh verifies recordings; equity calculator (3 open questions); round 2 in TEST-SESSION.md; push only with Josh's OK.
+
+## 2026-09-28 — Pre-actions, recorded self-test, deploy check
+
+**Project:** poker-with-friends
+**Duration:** medium
+
+- Built: pre-action toggles (limit: Fold/Call X/Call Any/Raise vs X/Raise Any; big-bet: Fold/Call X/Call Any), discard pre-selection, and an opt-in "Draw N" tick. Client-only; client tests C05–C10. `scripts/record-preactions.mjs` records a browser seat vs two socket-driven opponents with PASS/FAIL captions (final run 11/11).
+- Hard: first recorded runs failed on harness problems, not the feature: arming in a round where the tester had already acted, opponents that never bet, and the ✓ mark in a ticked button's text. Diagnose with a one-test rerun (`ONLY=`/`DEBUG=`) before blaming the product.
+- Learned: cross-realm arrays from the vm-loaded client break `assert.deepEqual`; compare JSON copies.
+- Decided (Josh): Check/Fold is right; no auto-draw unless "Draw N" is ticked; all proposed pre-action rules approved.
+- Surprising: the Railway app no longer exists ("Application not found"); likely the trial lapsed. Hobby = $5/mo incl. $5 usage, which covers this app.
+- Next: branch pushed, deploy on hold (Josh). Security test in its own session; round 2 (R13–R14 added); then go-live decision.

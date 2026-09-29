@@ -11,7 +11,8 @@ import { PLAYABLE_VARIANTS } from './engine-wrapper';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSocket, hasStoredSeat } from './useSocket';
-import { GameVariant, ActionType, GameMode } from './engine-wrapper';
+import { GameVariant, ActionType, GameMode, GamePhase } from './engine-wrapper';
+import { preActionChoices, preActionStillValid, resolvePreAction, type PreAction } from './pre-action';
 import {
   CardDisplay,
   PlayerSeat,
@@ -20,6 +21,7 @@ import {
   PotDisplay,
   WinDisplay,
   ActionPanel,
+  PreActionPanel,
   GameLog,
   decomposeChips,
 } from './components';
@@ -30,6 +32,7 @@ import {
   SEAT_POSITIONS,
   BET_OFFSETS,
   DRAW_PHASES,
+  BETTING_PHASES,
   CARD_DEAL_INTERVAL,
   formatActionType,
 } from './constants';
@@ -340,9 +343,8 @@ export default function MultiplayerTable() {
           setLastDrawActions({});
         }
 
-        // Reset card preselection and draw labels on new draw phase (FROM App.tsx lines 699-702)
+        // Reset draw labels on a new draw phase. Pre-selected discards are kept (they reset when the cards change).
         if (DRAW_PHASES.includes(currentPhase)) {
-          setSelectedDiscardIndices(new Set());
           setLastDrawActions({});
         }
       }
@@ -498,6 +500,7 @@ export default function MultiplayerTable() {
   }, [selectedDiscardIndices, socketActions]);
 
   const toggleDiscard = (idx: number) => {
+    setPreDraw(false); // the ticked "Draw N" was for the old selection
     setSelectedDiscardIndices(prev => {
       const next = new Set(prev);
       if (next.has(idx)) next.delete(idx);
@@ -577,6 +580,52 @@ export default function MultiplayerTable() {
         : `Hand ${ss.handInVariant}/${ss.handsPerVariant} \u2022 Game ${ss.rotationIndex + 1}/${ss.rotationLength}`)
       + (ss.capBB ? ` \u2022 Cap ${ss.capBB}BB` : '')
     : null;
+
+  // --- Acting before your turn: pre-actions and pre-selected discards ---
+  const me = gameState?.players.find(p => p.id === myId);
+  const liveHand = !!gameState && !showdownNow && !awaitingChoice && !roomState?.bot
+    && gameState.phase !== 'complete' && gameState.phase !== 'showdown';
+  const toCall = gameState && me ? Math.max(0, Math.min(gameState.currentBet - me.bet, me.chips)) : 0;
+  const preRound = gameState ? `${gameState.id}:${gameState.phase}` : '';
+  const canPreAct = liveHand && !!me && !me.folded && !me.allIn && !me.sittingOut
+    && BETTING_PHASES.has(gameState!.phase as GamePhase);
+  const [preAction, setPreAction] = useState<PreAction | null>(null);
+  const activePre = preAction && canPreAct && preAction.round === preRound && preActionStillValid(preAction, toCall)
+    ? preAction : null;
+  const autoAction = activePre && socketState.isYourTurn && socketState.availableActions && socketState.countdown !== -1
+    ? resolvePreAction(activePre, socketState.availableActions) : null;
+  // A pre-action that no longer applies (bet changed, street over) is dropped, not kept for later.
+  useEffect(() => { if (preAction && !activePre) setPreAction(null); }, [preAction, activePre]);
+  const preFiredRef = useRef<string | null>(null);
+  const decisionKey = gameState ? `${gameState.id}:${gameState.actionHistory.length}` : null;
+  useEffect(() => {
+    if (!activePre || !socketState.isYourTurn || !socketState.availableActions || !decisionKey || socketState.countdown === -1) return;
+    if (preFiredRef.current === decisionKey) return;
+    preFiredRef.current = decisionKey;
+    setPreAction(null);
+    if (autoAction) socketActions.sendAction(autoAction.type, autoAction.amount);
+  }, [activePre, autoAction, decisionKey, socketState.isYourTurn, socketState.availableActions, socketState.countdown, socketActions]);
+
+  // Discards can be picked any time before your draw; they reset when your cards change.
+  const inDrawPhase = !!gameState && DRAW_PHASES.includes(gameState.phase);
+  const drewThisRound = inDrawPhase && gameState!.actionHistory.slice(gameState!.phaseStartActionIndex)
+    .some(a => a.playerId === myId && (a.type === 'discard' || a.type === 'stand-pat'));
+  /** Your cards can be picked for the next draw: any time in a draw game until you've drawn this round */
+  const canPickDiscards = liveHand && !!me && !me.folded && !me.sittingOut
+    && (gameState?.drawsRemaining ?? 0) > 0 && !drewThisRound;
+  /** "Draw N" ticked in advance: the selected discards go in when your draw comes (off unless ticked) */
+  const [preDraw, setPreDraw] = useState(false);
+  const myCardsKey = me ? JSON.stringify(me.holeCards) : '';
+  useEffect(() => { setSelectedDiscardIndices(new Set()); setPreDraw(false); }, [myCardsKey]);
+  useEffect(() => { if (!canPickDiscards) setPreDraw(false); }, [canPickDiscards]);
+  const preDrawFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!preDraw || !inDrawPhase || !socketState.isYourTurn || !decisionKey || socketState.countdown === -1) return;
+    if (preDrawFiredRef.current === decisionKey) return;
+    preDrawFiredRef.current = decisionKey;
+    setPreDraw(false);
+    socketActions.sendDiscard([...selectedDiscardIndices].sort((a, b) => a - b));
+  }, [preDraw, inDrawPhase, decisionKey, selectedDiscardIndices, socketState.isYourTurn, socketState.countdown, socketActions]);
 
   // ============================================================
   // Early returns — multiplayer-only screens
@@ -713,6 +762,9 @@ export default function MultiplayerTable() {
   const potTotal = collectedPot + currentStreetBets;
 
   const isDrawPhase = gameState && DRAW_PHASES.includes(gameState.phase);
+  const preChoices = canPreAct && !socketState.isYourTurn
+    ? preActionChoices(toCall, gameState!.currentBet, gameState!.bettingStructure === 'fixed-limit')
+    : null;
   const drawStatus = gameState ? describeDrawStatus(gameState.variant, gameState.phase) : null;
   /** Cards drawn per completed draw, per player (opponents' counts are public, the cards are not) */
   const drawHistories: Record<string, number[]> = {};
@@ -1028,7 +1080,7 @@ export default function MultiplayerTable() {
               isTop={positions[i][1] < 50}
               onCardClick={toggleDiscard}
               selectedDiscardIndices={selectedDiscardIndices}
-              isDrawing={isDrawPhase === true && player.id === myId}
+              isDrawing={canPickDiscards && player.id === myId}
               dealtCardCount={
                 showdownNow
                   ? (player.folded ? 0 : player.holeCards.length)
@@ -1135,7 +1187,7 @@ export default function MultiplayerTable() {
             <BuyInPanel min={tableBuyInMin} max={maxBuyIn} value={tableBuyIn} onChange={setBuyInChoice}
               onSitDown={() => socketActions.sitDown(tableBuyIn)} />
           </div>
-        ) : isDrawPhase && socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && gameState ? (
+        ) : isDrawPhase && socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && gameState && !preDraw ? (
           <div className="flex flex-wrap items-center gap-2 justify-center">
             <span className="text-xs text-slate-400">Click cards to select for discard, then:</span>
             <button onClick={handleDiscard}
@@ -1143,7 +1195,7 @@ export default function MultiplayerTable() {
               {selectedDiscardIndices.size === 0 ? 'Stand Pat' : `Draw ${selectedDiscardIndices.size}`}
             </button>
           </div>
-        ) : socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && socketState.availableActions && gameState ? (
+        ) : socketState.isYourTurn && !isAnimating && socketState.countdown !== -1 && socketState.availableActions && gameState && !autoAction ? (
           <ActionPanel
             // Remount per decision so the bet amount resets to the new legal range
             key={`${gameState.id}-${gameState.actionHistory.length}`}
@@ -1206,8 +1258,25 @@ export default function MultiplayerTable() {
           // During runout animation — winners received but showdown not yet declared
           null
         ) : gameState ? (
-          <div className="text-center text-slate-600 text-xs py-2">
-            Waiting for {rotatedPlayers[rotatedActiveIndex]?.name ?? '...'}
+          <div className="flex flex-col items-center gap-1.5">
+            {preChoices && (
+              <PreActionPanel choices={preChoices} selected={activePre?.kind ?? null}
+                onSelect={kind => setPreAction(kind ? { kind, toCall, round: preRound } : null)} />
+            )}
+            {canPickDiscards && (
+              <>
+                <PreActionPanel
+                  choices={[{ kind: 'draw' as const, label: selectedDiscardIndices.size === 0 ? 'Stand Pat' : `Draw ${selectedDiscardIndices.size}` }]}
+                  selected={preDraw ? 'draw' : null}
+                  onSelect={kind => setPreDraw(kind === 'draw')} />
+                <div className="text-[11px] text-slate-400">
+                  {preDraw ? 'Goes in when your draw comes; tap a card to change it' : 'Tap your cards to pre-select discards'}
+                </div>
+              </>
+            )}
+            <div className="text-center text-slate-600 text-xs py-1">
+              Waiting for {rotatedPlayers[rotatedActiveIndex]?.name ?? '...'}
+            </div>
           </div>
         ) : null}
       </div>

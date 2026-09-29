@@ -24,6 +24,8 @@ Run this section first. Sections 1–6 below are the full regression script if t
 | R10 | HORSE: play through O8 into Razz, Stud, Stud8, then back to LHE | During the stud games the D stays on the same seat. The first LHE hand moves it one seat left. At H→O the D just keeps moving one seat per hand. |
 | R11 | **Badugi** as a Specific Game, then in 10-Game and Dealer's Choice | 4 cards each, three draws, limit betting (small bet for two rounds, big bet for two). Discarding works through the usual card-select controls. The hand line reads like "Badugi: 7-4-2-A" (a full badugi) or "3-card: 3-2-A". A four-card hand beats any three-card hand, then the lowest top card wins. |
 | R12 | **10-Game** mode from the lobby and from the host Game menu | The rotation is H, O, R, S, E, NLH, PLO, 2-7 TD, 2-7 SD, Badugi (8 hands each), and the tracker shows Game x/10 |
+| R13 | **Pre-actions** (added 2026-09-28): while someone else acts, tick a button under the table. Try Call Any, then Call X with a raise coming, then Check/Fold with nothing to call | Limit games show Fold · Call X · Call Any · Raise vs X · Raise Any; NLH/PLO/2-7 SD show no raise buttons. A ticked action goes the instant your turn comes. Call X and Check un-tick themselves if someone bets or raises first, and you get the normal buttons. Check/Fold checks when it's free. Ticks reset each street. |
+| R14 | **Pre-selecting discards** in 2-7 TD or Badugi: tap cards before your draw (during betting or while others draw) | The cards stay raised into the draw and the button reads "Draw N". Nothing draws unless you tick the **Draw N** / **Stand Pat** box; if ticked, it draws the moment your turn comes. Tapping another card un-ticks it. |
 
 ## 1. Room and seats
 
